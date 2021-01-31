@@ -1,0 +1,24 @@
+const sampler_t sampler =
+	CLK_NORMALIZED_COORDS_TRUE |
+	CLK_ADDRESS_MIRRORED_REPEAT |
+	CLK_FILTER_LINEAR;
+
+void kernel imgcopy(global uchar4 * restrict d_output,
+	read_only image2d_t d_input)
+{
+	const int c = get_global_id(0);
+	const int r = get_global_id(1);
+	const int2 dim = get_image_dim(d_input);
+
+	if (c < dim.x && r < dim.y) {
+		float2 coords = (float2)(c+0.5f, r+0.5f);
+		/* normalize coords */
+		coords.x /= dim.x;
+		coords.y /= dim.y;
+
+		coords *= 3;
+
+		const float4 px = read_imagef(d_input, sampler, coords);
+		d_output[r*dim.x+c] = convert_uchar4(px*255);
+	}
+}
