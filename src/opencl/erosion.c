@@ -2,9 +2,9 @@
 #include<string.h>
 
 #define STB_IMAGE_IMPLEMENTATION
-#include"../stb/stb_image.h" 
+#include"../../stb/stb_image.h" 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
-#include"../stb/stb_image_write.h" 
+#include"../../stb/stb_image_write.h" 
 
 
 #define CL_TARGET_OPENCL_VERSION 120
@@ -24,9 +24,9 @@ cl_event erosion(cl_kernel erosion_k, cl_command_queue que,
 	cl_uint i = 0;
 	err = clSetKernelArg(erosion_k, i++, sizeof(d_output), &d_output);
 	ocl_check(err, "set erosion arg", i-1);
-	err = clSetKernelArg(erosion_k, i++, sizeof(d_strel), &d_strel);
-	ocl_check(err, "set erosion arg", i-1);
 	err = clSetKernelArg(erosion_k, i++, sizeof(d_input), &d_input);
+	ocl_check(err, "set erosion arg", i-1);
+	err = clSetKernelArg(erosion_k, i++, sizeof(d_strel), &d_strel);
 	ocl_check(err, "set erosion arg", i-1);
 
 	err = clEnqueueNDRangeKernel(que, erosion_k, 2,
@@ -41,23 +41,34 @@ cl_event erosion(cl_kernel erosion_k, cl_command_queue que,
 
 
 void usage(int argc){
-	if(argc<2){
-		fprintf(stderr,"Usage: ./erosion <image.png>");
+	if(argc<3){
+		fprintf(stderr,"Usage: ./erosion <image.png> <strel.png> [b/g]");
+		fprintf(stderr,"the image is an image with 4 channels (R,G,B,transparency)");
+		fprintf(stderr,"strel is an image that is used as a structuring element");
+		fprintf(stderr,"b is for binary erosion, while g is for grayscale erosion");
+
 		exit(1);
 	}
 }
 
 int main(int argc, char ** args){
 	usage(argc);
+	if(args[3][0]!='b' && args[3][0]!='g'){
+		
+		fprintf(stderr,"%s option not supported\n",args[3]);
+		exit(1);
+
+	}
 	int width,height,channels;
 	// caricamento immagine in memoria come array di unsigned char
 	unsigned char * img= stbi_load(args[1],&width,&height,&channels,STBI_rgb_alpha);
 	if(img==NULL){
-		printf("errore nel caricamento dell'immagine");
+		printf("error while loading the image %s\n",args[1]);
+		exit(1);
 	}
-	printf("immagine caricata con larghezza %i, altezza %i e canali %i\n",width,height,channels);
+	printf("image loaded with  %i width, %i height and %i channels\n",width,height,channels);
 	if (channels < 3) {
-                fprintf(stderr, "source must have 4 channels\n");
+                fprintf(stderr, "source image must have 4 channels (<RGB,alpha> or some other format with transparency and 3 channels for color space)\n");
                 exit(1);
         }
 	unsigned char * outimg = NULL;
@@ -68,11 +79,19 @@ int main(int argc, char ** args){
 	cl_device_id d = select_device(p);
 	cl_context ctx = create_context(p, d);
 	cl_command_queue que = create_queue(ctx, d);
-	cl_program prog = create_program("erosion.ocl", ctx, d);
+	cl_program prog = create_program("morphology.ocl", ctx, d);
 	int err=0;
-	cl_kernel erosion_k = clCreateKernel(prog, "erosionImage", &err);
-	ocl_check(err, "create kernel erosion image");
-
+	cl_kernel erosion_k = NULL;
+	switch(args[3][0]){
+	case 'g':
+		erosion_k = clCreateKernel(prog, "erosionImage", &err);
+		ocl_check(err, "create kernel erosion image");
+		break;
+	case 'b':
+		erosion_k = clCreateKernel(prog, "erosionImageBinary", &err);
+		ocl_check(err, "create kernel erosion binary image");
+		break;
+	}
 	/* get information about the preferred work-group size multiple */
 	err = clGetKernelWorkGroupInfo(erosion_k, d,
 		CL_KERNEL_PREFERRED_WORK_GROUP_SIZE_MULTIPLE,
@@ -110,9 +129,10 @@ int main(int argc, char ** args){
 	
 
 	/** STRUCTURING ELEMENT DA IMMAGINE **/
-	unsigned char * imgstrel= stbi_load(args[1],&strel_width,&strel_height,&strel_channels,STBI_rgb_alpha);
+	unsigned char * imgstrel= stbi_load(args[2],&strel_width,&strel_height,&strel_channels,STBI_rgb_alpha);
 	if(imgstrel==NULL){
-		printf("error in the loading of strel image\n");
+		printf("error loading of strel image\n");
+		exit(1);
 	}
 	printf("image strel loaded with width %i, height %i and channels %i\n",strel_width,strel_height,strel_channels);
 	if (strel_channels < 3) {

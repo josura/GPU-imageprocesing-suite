@@ -1,6 +1,6 @@
 const sampler_t sampler =
 	CLK_NORMALIZED_COORDS_FALSE |
-	CLK_ADDRESS_ CLAMPED_TO_EDGE|
+	CLK_ADDRESS_CLAMP_TO_EDGE|
 	CLK_FILTER_LINEAR;
 
 
@@ -30,7 +30,7 @@ void kernel dilationImage(global uchar4 * restrict d_output,
 				const float2 finalcoords = coords + strelcoords;
 				float4 pxtmp = read_imagef(d_input, sampler, finalcoords);
 				const float4 strelpx = read_imagef(strel, sampler, strelcoords);
-				pxtmp = max(pxtmp+strelpx,maxvalue);
+				pxtmp = min(pxtmp+strelpx,maxvalue);
 				//control with a max pairwise to find max value for channel
 				pxresult = max(pxresult,pxtmp);
 			}
@@ -47,26 +47,42 @@ void kernel erosionImage(global uchar4 * restrict d_output,
 	const int c = get_global_id(0);
 	const int r = get_global_id(1);
 	const int2 dim = get_image_dim(d_input);
+	//if(c==dim.x>>1 && r==dim.y>>1){printf("dim %2.2v2i\n",dim);}
 	const int2 dimStrel = get_image_dim(strel);
+	//if(c==dim.x>>1 && r==dim.y>>1){printf("dimstrel %2.2v2i\n",dimStrel);}
 	const int2 shift =dimStrel>>1; 
+	//if(c==dim.x>>1 && r==dim.y>>1){printf("shift %2.2v2i\n",shift);}
 	if (c < dim.x && r < dim.y) {
 		float4 centerpx = read_imagef(d_input,sampler,(float2)(c,r));
+		//if(c==dim.x>>1 && r==dim.y>>1){printf("centerpx ");printf(" %2.2v4hlf\n",centerpx);}
 		float2 coords = (float2)(c-shift.x, r-shift.y);
-		float4 pxresult = (float4)(0);
+		//if(c==dim.x>>1 && r==dim.y>>1){printf("coords ");printf("coords %2.2v2hlf\n",coords);}
+		float4 pxresult = (float4)(1);
+		//if(c==dim.x>>1 && r==dim.y>>1){printf("pxresult first ");printf("%2.2v4hlf\n",pxresult);}
 		const float4 minvalue = (float4)(0);
+		//if(c==dim.x>>1 && r==dim.y>>1){printf("minvalue ");printf("%2.2v4hlf\n",minvalue);}
 		//0 is the minimum value for channel because UINT8_NORMALIZED
 		for(int i=0;i<dimStrel.x;i++){
 			//non so se fare prima righe o colonne, mi ricordo sia più veloce facendo le colonne
 			for(int j=0;j<dimStrel.y;j++){
 				const float2 strelcoords = (float2)(i,j);
+				//if(c==dim.x>>1 && r==dim.y>>1){printf("strelcoords ");printf("%2.2v2hlf\t",strelcoords);}
 				const float2 finalcoords = coords + strelcoords;
+				//if(c==dim.x>>1 && r==dim.y>>1){printf("finalcoords ");printf("%2.2v2hlf\t",finalcoords);}
 				float4 pxtmp = read_imagef(d_input, sampler, finalcoords);
+				//if(c==dim.x>>1 && r==dim.y>>1){printf("pxtmp ");printf("%2.2v4hlf\t",pxtmp);}
 				const float4 strelpx = read_imagef(strel, sampler, strelcoords);
-				pxtmp = min(pxtmp-strelpx,minvalue);
+				//if(c==dim.x>>1 && r==dim.y>>1){printf("strelpx ");printf("%2.2v4hlf\t",strelpx);}
+				pxtmp = max(pxtmp-strelpx,minvalue);
+				//if(c==dim.x>>1 && r==dim.y>>1){printf("pxtmp after ");printf("%2.2v4hlf\t",pxtmp);}
 				//control with a max pairwise to find max value for channel
-				pxresult = max(pxresult,pxtmp);
+				pxresult = min(pxresult,pxtmp);
+				//if(c==dim.x>>1 && r==dim.y>>1){printf("pxresult current ");printf("%2.2v4hlf\n",pxresult);}
 			}
 		}
+		//TODO fix transparency
+		pxresult.w=1.0;
+		//if(c==dim.x>>1 && r==dim.y>>1){printf("pxresult final ");printf("%2.2v4hlf\n",pxresult);}
 		d_output[r*dim.x+c] = convert_uchar4(pxresult*255);
 	}
 }
