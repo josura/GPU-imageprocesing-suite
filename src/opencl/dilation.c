@@ -45,11 +45,34 @@ void usage(int argc){
 		fprintf(stderr,"Usage: ./dilation <image.png> <strel.png> [b/g]");
 		fprintf(stderr,"the image is an image with 4 channels (R,G,B,transparency)");
 		fprintf(stderr,"strel is an image that is used as a structuring element");
-		fprintf(stderr,"b is for binary dilation, while g is for grayscale dilation");
+		fprintf(stderr,"b is for binary dilation, while g is for grayscale(channel) dilation");
 
 		exit(1);
 	}
 }
+
+unsigned char* arrayOfMaxValuesUC(unsigned int dim){
+	unsigned char* ret=malloc(sizeof(float)*dim);
+	for(int i=0;i<dim;i++)
+		ret[i]=0xff;
+	return ret;
+}
+
+unsigned char* grayscale2RGBA(unsigned char* inputGray,int width, int height){
+	unsigned int dimension = width*height;
+	unsigned char* ret=malloc(sizeof(float)*dimension*4);
+	unsigned char* maxValues = arrayOfMaxValuesUC(dimension);
+
+	memcpy(ret,inputGray,dimension*sizeof(float));
+	memcpy(ret+dimension*sizeof(float),inputGray,dimension*sizeof(float));
+	memcpy(ret+2*dimension*sizeof(float),inputGray,dimension*sizeof(float));
+	memcpy(ret+3*dimension*sizeof(float),maxValues,dimension*sizeof(float));
+
+	free(maxValues);
+	free(inputGray);
+	return ret;
+}
+
 
 int main(int argc, char ** args){
 	usage(argc);
@@ -62,6 +85,12 @@ int main(int argc, char ** args){
 	int width,height,channels;
 	// caricamento immagine in memoria come array di unsigned char
 	unsigned char * img= stbi_load(args[1],&width,&height,&channels,STBI_rgb_alpha);
+	if(channels==1){
+		printf("grayscale image with only one channel, doing transformation to 4 channels");
+		img = grayscale2RGBA(img,width,height);
+		channels=4;
+	}
+
 	if(img==NULL){
 		printf("error while loading the image %s\n",args[1]);
 		exit(1);
