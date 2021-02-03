@@ -11,40 +11,37 @@
 #include "ocl_boiler.h"
 
 
-size_t gws_align_dilation;
+size_t gws_align_complement;
 
-cl_event dilation(cl_kernel dilation_k, cl_command_queue que,
-	cl_mem d_output, cl_mem d_input,cl_mem d_strel,
-	cl_int nrows, cl_int ncols,cl_int strel_rows,cl_int strel_cols)
+cl_event complement(cl_kernel complement_k, cl_command_queue que,
+	cl_mem d_output, cl_mem d_input,
+	cl_int nrows, cl_int ncols)
 {
-	const size_t gws[] = { round_mul_up(ncols, gws_align_dilation), nrows };
-	cl_event dilation_evt;
+	const size_t gws[] = { round_mul_up(ncols, gws_align_complement), nrows };
+	cl_event complement_evt;
 	cl_int err;
 
 	cl_uint i = 0;
-	err = clSetKernelArg(dilation_k, i++, sizeof(d_output), &d_output);
-	ocl_check(err, "set dilation arg", i-1);
-	err = clSetKernelArg(dilation_k, i++, sizeof(d_input), &d_input);
-	ocl_check(err, "set dilation arg", i-1);
-	err = clSetKernelArg(dilation_k, i++, sizeof(d_strel), &d_strel);
-	ocl_check(err, "set dilation arg", i-1);
+	err = clSetKernelArg(complement_k, i++, sizeof(d_output), &d_output);
+	ocl_check(err, "set complement arg", i-1);
+	err = clSetKernelArg(complement_k, i++, sizeof(d_input), &d_input);
+	ocl_check(err, "set complement arg", i-1);
 
-	err = clEnqueueNDRangeKernel(que, dilation_k, 2,
+	err = clEnqueueNDRangeKernel(que, complement_k, 2,
 		NULL, gws, NULL,
-		0, NULL, &dilation_evt);
+		0, NULL, &complement_evt);
 
-	ocl_check(err, "enqueue dilation");
+	ocl_check(err, "enqueue complement");
 
-	return dilation_evt;
+	return complement_evt;
 }
 
 
 
 void usage(int argc){
-	if(argc<4){
-		fprintf(stderr,"Usage: ./erosion <image.png> <strel.png> <output.png>\n ");
+	if(argc<3){
+		fprintf(stderr,"Usage: ./complement <image.png> <output.png> \n");
 		fprintf(stderr,"the image is an image with 4 channels (R,G,B,transparency)\n");
-		fprintf(stderr,"strel is an image that is used as a structuring element\n");
 		fprintf(stderr,"output is the name of the output image\n");
 
 		exit(1);
@@ -72,7 +69,6 @@ unsigned char* grayscale2RGBA(unsigned char* inputGray,int width, int height){
 	free(inputGray);
 	return ret;
 }
-
 
 int main(int argc, char ** args){
 	usage(argc);
@@ -104,14 +100,14 @@ int main(int argc, char ** args){
 	cl_command_queue que = create_queue(ctx, d);
 	cl_program prog = create_program("morphology.ocl", ctx, d);
 	int err=0;
-	cl_kernel dilation_k = NULL;
-	dilation_k = clCreateKernel(prog, "dilationImage", &err);
-	ocl_check(err, "create kernel dilation image");
+	cl_kernel complement_k = NULL;
+	complement_k = clCreateKernel(prog, "complement", &err);
+	ocl_check(err, "create kernel complement image");
 	/* get information about the preferred work-group size multiple */
-	err = clGetKernelWorkGroupInfo(dilation_k, d,
+	err = clGetKernelWorkGroupInfo(complement_k, d,
 		CL_KERNEL_PREFERRED_WORK_GROUP_SIZE_MULTIPLE,
-		sizeof(gws_align_dilation), &gws_align_dilation, NULL);
-	ocl_check(err, "preferred wg multiple for dilation");
+		sizeof(gws_align_complement), &gws_align_complement, NULL);
+	ocl_check(err, "preferred wg multiple for complement");
 
 	cl_mem d_input = NULL, d_output = NULL;
 
@@ -133,94 +129,48 @@ int main(int argc, char ** args){
 	ocl_check(err, "create image d_input");
 
 
-	//SEZIONE STRUCTURING ELEMENT
-	cl_mem d_strel=NULL;
-	
 
-	/**STRUCTURING ELEMENT DEFINITO A MANO **/
-	int strel_width=3,strel_height=3,strel_channels=4;
-	//unsigned char * strelptr = malloc(strel_width*strel_height*channels);
-	//strelptr[0]
-	
-
-	/** STRUCTURING ELEMENT DA IMMAGINE **/
-	unsigned char * imgstrel= stbi_load(args[2],&strel_width,&strel_height,&strel_channels,STBI_rgb_alpha);
-	if(imgstrel==NULL){
-		printf("error loading of strel image\n");
-		exit(1);
-	}
-	printf("image strel loaded with width %i, height %i and channels %i\n",strel_width,strel_height,strel_channels);
-	if (strel_channels < 3) {
-                fprintf(stderr, "source strel must have 4 channels\n");
-                exit(1);
-        }
-
-
-	const cl_image_format fmt_strel = {
-		.image_channel_order = CL_RGBA,
-		.image_channel_data_type = CL_UNORM_INT8,
-	};
-	const cl_image_desc strel_desc = {
-		.image_type = CL_MEM_OBJECT_IMAGE2D,
-		.image_width = strel_width,
-		.image_height = strel_height,
-		//.image_row_pitch = src.data_size/src.height,
-	};
-	d_strel = clCreateImage(ctx,
-		CL_MEM_READ_ONLY | CL_MEM_HOST_WRITE_ONLY | CL_MEM_USE_HOST_PTR,
-		&fmt_strel, &strel_desc,
-		imgstrel,
-		&err);
-	ocl_check(err, "create image d_input");
-
-	//FINE SEZIONE STRUCTURING ELEMENT
 	d_output = clCreateBuffer(ctx,
 		CL_MEM_WRITE_ONLY | CL_MEM_HOST_READ_ONLY | CL_MEM_ALLOC_HOST_PTR,
 		dstdata_size, NULL,
 		&err);
 	ocl_check(err, "create buffer d_output");
 
-	cl_event dilation_evt, map_evt;
+	cl_event complement_evt, map_evt;
 
-	dilation_evt = dilation(dilation_k, que, d_output, d_input,d_strel, height, width, strel_height,strel_width);
+	complement_evt = complement(complement_k, que, d_output, d_input, height, width);
 
 	outimg = clEnqueueMapBuffer(que, d_output, CL_FALSE,
 		CL_MAP_READ,
 		0, dstdata_size,
-		1, &dilation_evt, &map_evt, &err);
+		1, &complement_evt, &map_evt, &err);
 	ocl_check(err, "enqueue map d_output");
 
 	err = clWaitForEvents(1, &map_evt);
 	ocl_check(err, "clfinish");
 
-	const double runtime_dilation_ms = runtime_ms(dilation_evt);
+	const double runtime_complement_ms = runtime_ms(complement_evt);
 	const double runtime_map_ms = runtime_ms(map_evt);
 
-	const double dilation_bw_gbs = dstdata_size/1.0e6/runtime_dilation_ms;
+	const double complement_bw_gbs = dstdata_size/1.0e6/runtime_complement_ms;
 	const double map_bw_gbs = dstdata_size/1.0e6/runtime_map_ms;
 
-	printf("dilation: %dx%d int in %gms: %g GB/s %g GE/s\n",
-		height, width, runtime_dilation_ms, dilation_bw_gbs, height*width/1.0e6/runtime_dilation_ms);
+	printf("complement: %dx%d int in %gms: %g GB/s %g GE/s\n",
+		height, width, runtime_complement_ms, complement_bw_gbs, height*width/1.0e6/runtime_complement_ms);
 	printf("map: %dx%d int in %gms: %g GB/s %g GE/s\n",
 		dstheight, dstwidth, runtime_map_ms, map_bw_gbs, dstheight*dstwidth/1.0e6/runtime_map_ms);
 
 	char outputImage[128];
-	sprintf(outputImage,"%s",args[3]);
+	sprintf(outputImage,"%s",args[2]);
 	printf("%s\n",outputImage);
 	stbi_write_png(outputImage,dstwidth,dstheight,channels,outimg,channels*dstwidth);
-	//err = save_pam(output_fname, &dst);
-	//if (err != 0) {
-	//	fprintf(stderr, "error writing %s\n", output_fname);
-	//	exit(1);
-	//}
-
 	err = clEnqueueUnmapMemObject(que, d_output, outimg,
 		0, NULL, NULL);
 	ocl_check(err, "unmap output");
 
 	clReleaseMemObject(d_output);
 	clReleaseMemObject(d_input);
-	clReleaseKernel(dilation_k);
+	clReleaseKernel(complement_k);
 	clReleaseProgram(prog);
 	clReleaseCommandQueue(que);
 	clReleaseContext(ctx);

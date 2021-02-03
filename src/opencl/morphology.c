@@ -11,41 +11,41 @@
 #include "ocl_boiler.h"
 
 
-size_t gws_align_dilation;
+size_t gws_align_erosion;
 
-cl_event dilation(cl_kernel dilation_k, cl_command_queue que,
+cl_event erosion(cl_kernel erosion_k, cl_command_queue que,
 	cl_mem d_output, cl_mem d_input,cl_mem d_strel,
 	cl_int nrows, cl_int ncols,cl_int strel_rows,cl_int strel_cols)
 {
-	const size_t gws[] = { round_mul_up(ncols, gws_align_dilation), nrows };
-	cl_event dilation_evt;
+	const size_t gws[] = { round_mul_up(ncols, gws_align_erosion), nrows };
+	cl_event erosion_evt;
 	cl_int err;
 
 	cl_uint i = 0;
-	err = clSetKernelArg(dilation_k, i++, sizeof(d_output), &d_output);
-	ocl_check(err, "set dilation arg", i-1);
-	err = clSetKernelArg(dilation_k, i++, sizeof(d_input), &d_input);
-	ocl_check(err, "set dilation arg", i-1);
-	err = clSetKernelArg(dilation_k, i++, sizeof(d_strel), &d_strel);
-	ocl_check(err, "set dilation arg", i-1);
+	err = clSetKernelArg(erosion_k, i++, sizeof(d_output), &d_output);
+	ocl_check(err, "set erosion arg", i-1);
+	err = clSetKernelArg(erosion_k, i++, sizeof(d_input), &d_input);
+	ocl_check(err, "set erosion arg", i-1);
+	err = clSetKernelArg(erosion_k, i++, sizeof(d_strel), &d_strel);
+	ocl_check(err, "set erosion arg", i-1);
 
-	err = clEnqueueNDRangeKernel(que, dilation_k, 2,
+	err = clEnqueueNDRangeKernel(que, erosion_k, 2,
 		NULL, gws, NULL,
-		0, NULL, &dilation_evt);
+		0, NULL, &erosion_evt);
 
-	ocl_check(err, "enqueue dilation");
+	ocl_check(err, "enqueue erosion");
 
-	return dilation_evt;
+	return erosion_evt;
 }
 
 
 
 void usage(int argc){
-	if(argc<4){
-		fprintf(stderr,"Usage: ./erosion <image.png> <strel.png> <output.png>\n ");
-		fprintf(stderr,"the image is an image with 4 channels (R,G,B,transparency)\n");
-		fprintf(stderr,"strel is an image that is used as a structuring element\n");
-		fprintf(stderr,"output is the name of the output image\n");
+	if(argc<3){
+		fprintf(stderr,"Usage: ./erosion <image.png> <strel.png> [b/g]");
+		fprintf(stderr,"the image is an image with 4 channels (R,G,B,transparency)");
+		fprintf(stderr,"strel is an image that is used as a structuring element");
+		fprintf(stderr,"b is for binary erosion, while g is for grayscale erosion");
 
 		exit(1);
 	}
@@ -73,9 +73,14 @@ unsigned char* grayscale2RGBA(unsigned char* inputGray,int width, int height){
 	return ret;
 }
 
-
 int main(int argc, char ** args){
 	usage(argc);
+	if(args[3][0]!='b' && args[3][0]!='g'){
+		
+		fprintf(stderr,"%s option not supported\n",args[3]);
+		exit(1);
+
+	}
 	int width,height,channels;
 	// caricamento immagine in memoria come array di unsigned char
 	unsigned char * img= stbi_load(args[1],&width,&height,&channels,STBI_rgb_alpha);
@@ -104,14 +109,22 @@ int main(int argc, char ** args){
 	cl_command_queue que = create_queue(ctx, d);
 	cl_program prog = create_program("morphology.ocl", ctx, d);
 	int err=0;
-	cl_kernel dilation_k = NULL;
-	dilation_k = clCreateKernel(prog, "dilationImage", &err);
-	ocl_check(err, "create kernel dilation image");
+	cl_kernel erosion_k = NULL;
+	switch(args[3][0]){
+	case 'g':
+		erosion_k = clCreateKernel(prog, "erosionImage", &err);
+		ocl_check(err, "create kernel erosion image");
+		break;
+	case 'b':
+		erosion_k = clCreateKernel(prog, "erosionImageBinary", &err);
+		ocl_check(err, "create kernel erosion binary image");
+		break;
+	}
 	/* get information about the preferred work-group size multiple */
-	err = clGetKernelWorkGroupInfo(dilation_k, d,
+	err = clGetKernelWorkGroupInfo(erosion_k, d,
 		CL_KERNEL_PREFERRED_WORK_GROUP_SIZE_MULTIPLE,
-		sizeof(gws_align_dilation), &gws_align_dilation, NULL);
-	ocl_check(err, "preferred wg multiple for dilation");
+		sizeof(gws_align_erosion), &gws_align_erosion, NULL);
+	ocl_check(err, "preferred wg multiple for erosion");
 
 	cl_mem d_input = NULL, d_output = NULL;
 
@@ -180,32 +193,32 @@ int main(int argc, char ** args){
 		&err);
 	ocl_check(err, "create buffer d_output");
 
-	cl_event dilation_evt, map_evt;
+	cl_event erosion_evt, map_evt;
 
-	dilation_evt = dilation(dilation_k, que, d_output, d_input,d_strel, height, width, strel_height,strel_width);
+	erosion_evt = erosion(erosion_k, que, d_output, d_input,d_strel, height, width, strel_height,strel_width);
 
 	outimg = clEnqueueMapBuffer(que, d_output, CL_FALSE,
 		CL_MAP_READ,
 		0, dstdata_size,
-		1, &dilation_evt, &map_evt, &err);
+		1, &erosion_evt, &map_evt, &err);
 	ocl_check(err, "enqueue map d_output");
 
 	err = clWaitForEvents(1, &map_evt);
 	ocl_check(err, "clfinish");
 
-	const double runtime_dilation_ms = runtime_ms(dilation_evt);
+	const double runtime_erosion_ms = runtime_ms(erosion_evt);
 	const double runtime_map_ms = runtime_ms(map_evt);
 
-	const double dilation_bw_gbs = dstdata_size/1.0e6/runtime_dilation_ms;
+	const double erosion_bw_gbs = dstdata_size/1.0e6/runtime_erosion_ms;
 	const double map_bw_gbs = dstdata_size/1.0e6/runtime_map_ms;
 
-	printf("dilation: %dx%d int in %gms: %g GB/s %g GE/s\n",
-		height, width, runtime_dilation_ms, dilation_bw_gbs, height*width/1.0e6/runtime_dilation_ms);
+	printf("erosion: %dx%d int in %gms: %g GB/s %g GE/s\n",
+		height, width, runtime_erosion_ms, erosion_bw_gbs, height*width/1.0e6/runtime_erosion_ms);
 	printf("map: %dx%d int in %gms: %g GB/s %g GE/s\n",
 		dstheight, dstwidth, runtime_map_ms, map_bw_gbs, dstheight*dstwidth/1.0e6/runtime_map_ms);
 
 	char outputImage[128];
-	sprintf(outputImage,"%s",args[3]);
+	sprintf(outputImage,"processed.png");
 	printf("%s\n",outputImage);
 	stbi_write_png(outputImage,dstwidth,dstheight,channels,outimg,channels*dstwidth);
 	//err = save_pam(output_fname, &dst);
@@ -220,7 +233,7 @@ int main(int argc, char ** args){
 
 	clReleaseMemObject(d_output);
 	clReleaseMemObject(d_input);
-	clReleaseKernel(dilation_k);
+	clReleaseKernel(erosion_k);
 	clReleaseProgram(prog);
 	clReleaseCommandQueue(que);
 	clReleaseContext(ctx);

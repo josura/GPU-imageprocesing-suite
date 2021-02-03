@@ -41,11 +41,11 @@ cl_event erosion(cl_kernel erosion_k, cl_command_queue que,
 
 
 void usage(int argc){
-	if(argc<3){
-		fprintf(stderr,"Usage: ./erosion <image.png> <strel.png> [b/g]");
-		fprintf(stderr,"the image is an image with 4 channels (R,G,B,transparency)");
-		fprintf(stderr,"strel is an image that is used as a structuring element");
-		fprintf(stderr,"b is for binary erosion, while g is for grayscale erosion");
+	if(argc<4){
+		fprintf(stderr,"Usage: ./erosion <image.png> <strel.png> <output.png>\n ");
+		fprintf(stderr,"the image is an image with 4 channels (R,G,B,transparency)\n");
+		fprintf(stderr,"strel is an image that is used as a structuring element\n");
+		fprintf(stderr,"output is the name of the output image\n");
 
 		exit(1);
 	}
@@ -75,12 +75,6 @@ unsigned char* grayscale2RGBA(unsigned char* inputGray,int width, int height){
 
 int main(int argc, char ** args){
 	usage(argc);
-	if(args[3][0]!='b' && args[3][0]!='g'){
-		
-		fprintf(stderr,"%s option not supported\n",args[3]);
-		exit(1);
-
-	}
 	int width,height,channels;
 	// caricamento immagine in memoria come array di unsigned char
 	unsigned char * img= stbi_load(args[1],&width,&height,&channels,STBI_rgb_alpha);
@@ -110,16 +104,8 @@ int main(int argc, char ** args){
 	cl_program prog = create_program("morphology.ocl", ctx, d);
 	int err=0;
 	cl_kernel erosion_k = NULL;
-	switch(args[3][0]){
-	case 'g':
-		erosion_k = clCreateKernel(prog, "erosionImage", &err);
-		ocl_check(err, "create kernel erosion image");
-		break;
-	case 'b':
-		erosion_k = clCreateKernel(prog, "erosionImageBinary", &err);
-		ocl_check(err, "create kernel erosion binary image");
-		break;
-	}
+	erosion_k = clCreateKernel(prog, "erosionImage", &err);
+	ocl_check(err, "create kernel erosion image");
 	/* get information about the preferred work-group size multiple */
 	err = clGetKernelWorkGroupInfo(erosion_k, d,
 		CL_KERNEL_PREFERRED_WORK_GROUP_SIZE_MULTIPLE,
@@ -188,8 +174,8 @@ int main(int argc, char ** args){
 
 	//FINE SEZIONE STRUCTURING ELEMENT
 	d_output = clCreateBuffer(ctx,
-		CL_MEM_WRITE_ONLY | CL_MEM_HOST_READ_ONLY | CL_MEM_ALLOC_HOST_PTR,
-		dstdata_size, NULL,
+	CL_MEM_WRITE_ONLY | CL_MEM_HOST_READ_ONLY | CL_MEM_ALLOC_HOST_PTR,
+	dstdata_size, NULL,
 		&err);
 	ocl_check(err, "create buffer d_output");
 
@@ -218,14 +204,9 @@ int main(int argc, char ** args){
 		dstheight, dstwidth, runtime_map_ms, map_bw_gbs, dstheight*dstwidth/1.0e6/runtime_map_ms);
 
 	char outputImage[128];
-	sprintf(outputImage,"processed.png");
-	printf("%s\n",outputImage);
+	sprintf(outputImage,"%s",args[3]);
+	printf("image saved as %s\n",outputImage);
 	stbi_write_png(outputImage,dstwidth,dstheight,channels,outimg,channels*dstwidth);
-	//err = save_pam(output_fname, &dst);
-	//if (err != 0) {
-	//	fprintf(stderr, "error writing %s\n", output_fname);
-	//	exit(1);
-	//}
 
 	err = clEnqueueUnmapMemObject(que, d_output, outimg,
 		0, NULL, NULL);

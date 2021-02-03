@@ -11,40 +11,40 @@
 #include "ocl_boiler.h"
 
 
-size_t gws_align_dilation;
+size_t gws_align_difference;
 
-cl_event dilation(cl_kernel dilation_k, cl_command_queue que,
-	cl_mem d_output, cl_mem d_input,cl_mem d_strel,
-	cl_int nrows, cl_int ncols,cl_int strel_rows,cl_int strel_cols)
+cl_event difference(cl_kernel difference_k, cl_command_queue que,
+	cl_mem d_output, cl_mem d_input,cl_mem d_input2,
+	cl_int nrows, cl_int ncols,cl_int input2_rows,cl_int input2_cols)
 {
-	const size_t gws[] = { round_mul_up(ncols, gws_align_dilation), nrows };
-	cl_event dilation_evt;
+	const size_t gws[] = { round_mul_up(ncols, gws_align_difference), nrows };
+	cl_event difference_evt;
 	cl_int err;
 
 	cl_uint i = 0;
-	err = clSetKernelArg(dilation_k, i++, sizeof(d_output), &d_output);
-	ocl_check(err, "set dilation arg", i-1);
-	err = clSetKernelArg(dilation_k, i++, sizeof(d_input), &d_input);
-	ocl_check(err, "set dilation arg", i-1);
-	err = clSetKernelArg(dilation_k, i++, sizeof(d_strel), &d_strel);
-	ocl_check(err, "set dilation arg", i-1);
+	err = clSetKernelArg(difference_k, i++, sizeof(d_output), &d_output);
+	ocl_check(err, "set difference arg", i-1);
+	err = clSetKernelArg(difference_k, i++, sizeof(d_input), &d_input);
+	ocl_check(err, "set difference arg", i-1);
+	err = clSetKernelArg(difference_k, i++, sizeof(d_input2), &d_input2);
+	ocl_check(err, "set difference arg", i-1);
 
-	err = clEnqueueNDRangeKernel(que, dilation_k, 2,
+	err = clEnqueueNDRangeKernel(que, difference_k, 2,
 		NULL, gws, NULL,
-		0, NULL, &dilation_evt);
+		0, NULL, &difference_evt);
 
-	ocl_check(err, "enqueue dilation");
+	ocl_check(err, "enqueue difference");
 
-	return dilation_evt;
+	return difference_evt;
 }
 
 
 
 void usage(int argc){
 	if(argc<4){
-		fprintf(stderr,"Usage: ./erosion <image.png> <strel.png> <output.png>\n ");
-		fprintf(stderr,"the image is an image with 4 channels (R,G,B,transparency)\n");
-		fprintf(stderr,"strel is an image that is used as a structuring element\n");
+		fprintf(stderr,"Usage: ./difference <image1.png> <image2.png>\n");
+		fprintf(stderr,"the image1 is an image with 4 channels (R,G,B,transparency)\n");
+		fprintf(stderr,"image2 is an image that is substracted to image1\n");
 		fprintf(stderr,"output is the name of the output image\n");
 
 		exit(1);
@@ -72,7 +72,6 @@ unsigned char* grayscale2RGBA(unsigned char* inputGray,int width, int height){
 	free(inputGray);
 	return ret;
 }
-
 
 int main(int argc, char ** args){
 	usage(argc);
@@ -104,14 +103,14 @@ int main(int argc, char ** args){
 	cl_command_queue que = create_queue(ctx, d);
 	cl_program prog = create_program("morphology.ocl", ctx, d);
 	int err=0;
-	cl_kernel dilation_k = NULL;
-	dilation_k = clCreateKernel(prog, "dilationImage", &err);
-	ocl_check(err, "create kernel dilation image");
+	cl_kernel difference_k = NULL;
+	difference_k = clCreateKernel(prog, "imageDifference", &err);
+	ocl_check(err, "create kernel difference image");
 	/* get information about the preferred work-group size multiple */
-	err = clGetKernelWorkGroupInfo(dilation_k, d,
+	err = clGetKernelWorkGroupInfo(difference_k, d,
 		CL_KERNEL_PREFERRED_WORK_GROUP_SIZE_MULTIPLE,
-		sizeof(gws_align_dilation), &gws_align_dilation, NULL);
-	ocl_check(err, "preferred wg multiple for dilation");
+		sizeof(gws_align_difference), &gws_align_difference, NULL);
+	ocl_check(err, "preferred wg multiple for difference");
 
 	cl_mem d_input = NULL, d_output = NULL;
 
@@ -132,75 +131,69 @@ int main(int argc, char ** args){
 		&err);
 	ocl_check(err, "create image d_input");
 
+	cl_mem d_input2=NULL;
 
-	//SEZIONE STRUCTURING ELEMENT
-	cl_mem d_strel=NULL;
-	
-
-	/**STRUCTURING ELEMENT DEFINITO A MANO **/
-	int strel_width=3,strel_height=3,strel_channels=4;
-	//unsigned char * strelptr = malloc(strel_width*strel_height*channels);
-	//strelptr[0]
-	
-
-	/** STRUCTURING ELEMENT DA IMMAGINE **/
-	unsigned char * imgstrel= stbi_load(args[2],&strel_width,&strel_height,&strel_channels,STBI_rgb_alpha);
-	if(imgstrel==NULL){
-		printf("error loading of strel image\n");
+	int input2_width=3,input2_height=3,input2_channels=4;
+	unsigned char * imginput2= stbi_load(args[2],&input2_width,&input2_height,&input2_channels,STBI_rgb_alpha);
+	if(imginput2==NULL){
+		printf("error loading of input2 image\n");
 		exit(1);
 	}
-	printf("image strel loaded with width %i, height %i and channels %i\n",strel_width,strel_height,strel_channels);
-	if (strel_channels < 3) {
-                fprintf(stderr, "source strel must have 4 channels\n");
+	printf("image input2 loaded with width %i, height %i and channels %i\n",input2_width,input2_height,input2_channels);
+	if (input2_channels < 3) {
+                fprintf(stderr, "source input2 must have 4 channels\n");
                 exit(1);
         }
+	if (input2_width!=width || input2_height!=height){
+		fprintf(stderr,"the images are not of the same size\n");
+		exit(1);
+	}
 
 
-	const cl_image_format fmt_strel = {
+	const cl_image_format fmt_input2 = {
 		.image_channel_order = CL_RGBA,
 		.image_channel_data_type = CL_UNORM_INT8,
 	};
-	const cl_image_desc strel_desc = {
+	const cl_image_desc input2_desc = {
 		.image_type = CL_MEM_OBJECT_IMAGE2D,
-		.image_width = strel_width,
-		.image_height = strel_height,
+		.image_width = input2_width,
+		.image_height = input2_height,
 		//.image_row_pitch = src.data_size/src.height,
 	};
-	d_strel = clCreateImage(ctx,
+	d_input2 = clCreateImage(ctx,
 		CL_MEM_READ_ONLY | CL_MEM_HOST_WRITE_ONLY | CL_MEM_USE_HOST_PTR,
-		&fmt_strel, &strel_desc,
-		imgstrel,
+		&fmt_input2, &input2_desc,
+		imginput2,
 		&err);
 	ocl_check(err, "create image d_input");
 
-	//FINE SEZIONE STRUCTURING ELEMENT
 	d_output = clCreateBuffer(ctx,
 		CL_MEM_WRITE_ONLY | CL_MEM_HOST_READ_ONLY | CL_MEM_ALLOC_HOST_PTR,
 		dstdata_size, NULL,
 		&err);
 	ocl_check(err, "create buffer d_output");
 
-	cl_event dilation_evt, map_evt;
+	cl_event difference_evt, map_evt;
 
-	dilation_evt = dilation(dilation_k, que, d_output, d_input,d_strel, height, width, strel_height,strel_width);
+	difference_evt = difference(difference_k, que, d_output, d_input,d_input2, height, width, input2_height,input2_width);
 
 	outimg = clEnqueueMapBuffer(que, d_output, CL_FALSE,
 		CL_MAP_READ,
 		0, dstdata_size,
-		1, &dilation_evt, &map_evt, &err);
+		1, &difference_evt, &map_evt, &err);
 	ocl_check(err, "enqueue map d_output");
 
 	err = clWaitForEvents(1, &map_evt);
 	ocl_check(err, "clfinish");
 
-	const double runtime_dilation_ms = runtime_ms(dilation_evt);
+	const double runtime_difference_ms = runtime_ms(difference_evt);
 	const double runtime_map_ms = runtime_ms(map_evt);
 
-	const double dilation_bw_gbs = dstdata_size/1.0e6/runtime_dilation_ms;
+	const double difference_bw_gbs = dstdata_size/1.0e6/runtime_difference_ms;
 	const double map_bw_gbs = dstdata_size/1.0e6/runtime_map_ms;
 
-	printf("dilation: %dx%d int in %gms: %g GB/s %g GE/s\n",
-		height, width, runtime_dilation_ms, dilation_bw_gbs, height*width/1.0e6/runtime_dilation_ms);
+	printf("difference: %dx%d int in %gms: %g GB/s %g GE/s\n",
+		height, width, runtime_difference_ms, difference_bw_gbs, height*width/1.0e6/runtime_difference_ms);
 	printf("map: %dx%d int in %gms: %g GB/s %g GE/s\n",
 		dstheight, dstwidth, runtime_map_ms, map_bw_gbs, dstheight*dstwidth/1.0e6/runtime_map_ms);
 
@@ -208,11 +201,7 @@ int main(int argc, char ** args){
 	sprintf(outputImage,"%s",args[3]);
 	printf("%s\n",outputImage);
 	stbi_write_png(outputImage,dstwidth,dstheight,channels,outimg,channels*dstwidth);
-	//err = save_pam(output_fname, &dst);
-	//if (err != 0) {
-	//	fprintf(stderr, "error writing %s\n", output_fname);
-	//	exit(1);
-	//}
+	
 
 	err = clEnqueueUnmapMemObject(que, d_output, outimg,
 		0, NULL, NULL);
@@ -220,7 +209,7 @@ int main(int argc, char ** args){
 
 	clReleaseMemObject(d_output);
 	clReleaseMemObject(d_input);
-	clReleaseKernel(dilation_k);
+	clReleaseKernel(difference_k);
 	clReleaseProgram(prog);
 	clReleaseCommandQueue(que);
 	clReleaseContext(ctx);
