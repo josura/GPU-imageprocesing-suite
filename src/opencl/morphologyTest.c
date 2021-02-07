@@ -20,18 +20,68 @@ int main(int argc, char ** args){
 
 	unsigned char * imgstrel= stbi_load(args[2],&strelwidth,&strelheight,&strelchannels,STBI_rgb_alpha);
 
+	//EROSION TEST
     unsigned char * processedErosion = fullErosion(img,imgstrel,width,height,channels,strelwidth,strelheight,strelchannels);
     if(processedErosion==NULL){
         fprintf(stderr,"problems in method for erosion\n");
         exit(1);
     }
-    
 
-	stbi_write_png(args[3],width,height,channels,processedErosion,channels*width);
-    printf("image saved as %s\n",args[3]);
+	//DILATION TEST
+	unsigned char * processedDilation = fullDilation(img,imgstrel,width,height,channels,strelwidth,strelheight,strelchannels);
+    if(processedErosion==NULL){
+        fprintf(stderr,"problems in method for dilation\n");
+        exit(1);
+    }
+
+	//GRADIENT TEST
+	unsigned char * processedGradient = fullGradient(img,imgstrel,width,height,channels,strelwidth,strelheight,strelchannels);
+    if(processedErosion==NULL){
+        fprintf(stderr,"problems in method for gradient\n");
+        exit(1);
+    }
+
+	//CLOSING TEST
+	unsigned char * processedClosing = fullClosing(img,imgstrel,width,height,channels,strelwidth,strelheight,strelchannels);
+    if(processedErosion==NULL){
+        fprintf(stderr,"problems in method for closing\n");
+        exit(1);
+    }
+
+	//OPENING TEST
+	unsigned char * processedOpening = fullOpening(img,imgstrel,width,height,channels,strelwidth,strelheight,strelchannels);
+    if(processedErosion==NULL){
+        fprintf(stderr,"problems in method for opening\n");
+        exit(1);
+    }
+    
+	char buffer[128];
+	sprintf(buffer,"erosion%s",args[3]);
+	stbi_write_png(buffer,width,height,channels,processedErosion,channels*width);
+    printf("erosion image saved as %s\n",buffer);
+
+	sprintf(buffer,"dilation%s",args[3]);
+	stbi_write_png(buffer,width,height,channels,processedDilation,channels*width);
+    printf("dilation image saved as %s\n",buffer);
+
+	sprintf(buffer,"gradient%s",args[3]);
+	stbi_write_png(buffer,width,height,channels,processedGradient,channels*width);
+    printf("gradient image saved as %s\n",buffer);
+
+	sprintf(buffer,"opening%s",args[3]);
+	stbi_write_png(buffer,width,height,channels,processedOpening,channels*width);
+    printf("opening image saved as %s\n",buffer);
+
+	sprintf(buffer,"Closing%s",args[3]);
+	stbi_write_png(buffer,width,height,channels,processedClosing,channels*width);
+    printf("closing image saved as %s\n",buffer);
 
     stbi_image_free(img);
     stbi_image_free(imgstrel);
-    stbi_image_free(processedErosion);
+    /*stbi_image_free(processedErosion);
+    stbi_image_free(processedDilation);
+    stbi_image_free(processedGradient);
+    stbi_image_free(processedOpening);
+    stbi_image_free(processedClosing);*/
 
 }
