@@ -227,6 +227,6 @@ int main(int argc, char ** args){
 
 
 	stbi_image_free(img);
-	
+	stbi_image_free(imgstrel);
 	return 0;
 }

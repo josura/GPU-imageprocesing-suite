@@ -2,7 +2,8 @@ LDLIBS=-lOpenCL -pthread -lm
 #LDLIBS=-framework OpenCL
 
 
-TARGETS+=zoomx2 erosion dilation
+TARGETS+= zoomx2 erosion dilation difference complement opening closing gradient tophat bottomhat
+TARGETS+= morphology morphologyTest
 
 all: $(TARGETS)
 

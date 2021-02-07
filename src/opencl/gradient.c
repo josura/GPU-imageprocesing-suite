@@ -208,6 +208,8 @@ int main(int argc, char ** args){
 	clReleaseMemObject(d_output);
 	clReleaseMemObject(d_input);
 	clReleaseKernel(erosion_k);
+	clReleaseKernel(dilation_k);
+	clReleaseKernel(difference_k);
 	clReleaseProgram(prog);
 	clReleaseCommandQueue(que);
 	clReleaseContext(ctx);
