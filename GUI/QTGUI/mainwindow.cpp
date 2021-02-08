@@ -10,6 +10,7 @@ MainWindow::MainWindow(QWidget *parent)
     QStringList operations;
     operations<<"erosion"<<"dilation"<<"gradient"<<"opening"<<"closing"<<"tophat"<<"bottomhat";
     ui->comboBox->addItems(operations);
+    changed=false;
 }
 
 MainWindow::~MainWindow()
@@ -47,6 +48,7 @@ void MainWindow::setImage(const QString name){
         normalImageHeight=image.height();
         normalImageWidth=image.width();
         ui->Image ->setPixmap(QPixmap::fromImage(image).scaled(ui->scrollAreaImage->width(),ui->scrollAreaImage->height()));
+        changed=true;
     }
 }
 
@@ -82,6 +84,7 @@ void MainWindow::setStrel(const QString strelname){
         strelName = strelname;
         strelImageHeight=strelimage.height();
         strelImageWidth=strelimage.width();
+        changed=true;
     }
 }
 
@@ -99,19 +102,22 @@ void MainWindow::on_pushButton_clicked()
     } else {
            QMessageBox::critical(this," error","error processing "+imageName+" with strel"+strelName);
     }*/
-    QObject *parentProc=nullptr;
-    QStringList arguments;
-    arguments << ui->lineEdit->text() << ui->lineEdit_2->text() << "/tmp/processedImage.png" << operation;
+    if(changed){
+        QObject *parentProc=nullptr;
+        QStringList arguments;
+        arguments << ui->lineEdit->text() << ui->lineEdit_2->text() << "/tmp/processedImage.png" << operation;
 
-    QProcess * morphing= new QProcess(parentProc);
-    morphing->setWorkingDirectory("../../src/opencl/");
-    morphing->start("../../src/opencl/morphology",arguments);
-    if(!morphing->waitForFinished()){
-        QMessageBox::critical(this," error","error processing "+imageName+" with strel"+strelName);
-    }else{
-        processedName = "/tmp/processedImage.png";
-        QImage procImage(processedName);
-        ui->processedImage ->setPixmap(QPixmap::fromImage(procImage).scaled(ui->scrollAreaImage->width(),ui->scrollAreaImage->height()));
+        QProcess * morphing= new QProcess(parentProc);
+        morphing->setWorkingDirectory("../../src/opencl/");
+        morphing->start("../../src/opencl/morphology",arguments);
+        if(!morphing->waitForFinished()){
+            QMessageBox::critical(this," error","error processing "+imageName+" with strel"+strelName);
+        }else{
+            processedName = "/tmp/processedImage.png";
+            QImage procImage(processedName);
+            ui->processedImage ->setPixmap(QPixmap::fromImage(procImage).scaled(ui->scrollAreaImage->width(),ui->scrollAreaImage->height()));
+        }
+        changed=false;
     }
 
 
@@ -127,10 +133,11 @@ void MainWindow::on_pushButton_2_clicked()
 
 void MainWindow::on_pushButton_3_clicked()
 {
+    int test=0;
     if(processedName==NULL){
         QMessageBox::warning(this," warning","image not yet processed");
     } else{
-        QString file_name = QFileDialog::getSaveFileName(this,"choose a name for the processed image",QDir::homePath());
+        QString file_name = QFileDialog::getSaveFileName(this,"choose a name for the processed image",QDir::homePath(),"*.png");
         QImage procImage(processedName);
         if(procImage.isNull()){
             QMessageBox::critical(this," error","error while saving the image");

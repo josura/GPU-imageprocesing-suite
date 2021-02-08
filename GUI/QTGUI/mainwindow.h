@@ -42,5 +42,6 @@ private:
     int processedImageWidth,processedImageHeight;
     int normalImageWidth,normalImageHeight;
     int strelImageWidth,strelImageHeight;
+    bool changed;
 };
 #endif // MAINWINDOW_H

@@ -20,6 +20,7 @@ int main(int argc, char ** args){
 	int width,height,channels;
 	unsigned char* processed =morphOperation(args[1],args[2],args[4],&width,&height,&channels);
 
+
 	if(processed){
 		char buffer[128];
 		sprintf(buffer,"%s",args[3]);
