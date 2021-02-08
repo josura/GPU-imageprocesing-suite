@@ -9,7 +9,9 @@ void usage(int argc){
 
 		exit(1);
 	}
+
 }
+
 
 int main(int argc, char ** args){
 	usage(argc);

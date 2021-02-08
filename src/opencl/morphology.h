@@ -121,32 +121,115 @@ unsigned char* arrayOfMaxValuesUC(unsigned int dim){
 }
 
 unsigned char* grayscale2RGBA(unsigned char* inputGray,int width, int height){
-	unsigned int dimension = width*height;
-	unsigned char* ret=(unsigned char*)malloc(sizeof(float)*dimension*4);
+	unsigned int dimension = width*height*sizeof(float);
+	unsigned char* ret=(unsigned char*)malloc(dimension*4);
 	unsigned char* maxValues = arrayOfMaxValuesUC(dimension);
-
-	memcpy(ret,inputGray,dimension*sizeof(float));
-	memcpy(ret+dimension*sizeof(float),inputGray,dimension*sizeof(float));
-	memcpy(ret+2*dimension*sizeof(float),inputGray,dimension*sizeof(float));
-	memcpy(ret+3*dimension*sizeof(float),maxValues,dimension*sizeof(float));
+	memcpy(ret,inputGray,dimension);
+	memcpy(ret+dimension,inputGray,dimension);
+	memcpy(ret+2*dimension,inputGray,dimension);
+	memcpy(ret+3*dimension,maxValues,dimension);
 
 	free(maxValues);
 	free(inputGray);
 	return ret;
 }
 
-unsigned char * fullErosion(unsigned char* image,unsigned char* strel,int imagewidth,int imageheight,int imagechannels,int strelwidth, int strelheight,int strelchannels){
+unsigned char* GA2RGBA(unsigned char* inputGrayAlpha,int width, int height){
+	unsigned int dimension = width*height;
+	unsigned char* ret=(unsigned char*)malloc(sizeof(float)*dimension*4);
+	unsigned char* maxValues = arrayOfMaxValuesUC(dimension);
 
+	memcpy(ret,inputGrayAlpha,dimension*sizeof(float));
+	memcpy(ret+dimension*sizeof(float),inputGrayAlpha,dimension*sizeof(float));
+	memcpy(ret+2*dimension*sizeof(float),inputGrayAlpha,dimension*sizeof(float));
+	memcpy(ret+3*dimension*sizeof(float),inputGrayAlpha,dimension*sizeof(float));
+
+	free(maxValues);
+	free(inputGrayAlpha);
+	return ret;
+}
+
+unsigned char* RGB2RGBA(unsigned char* inputRGB,int width, int height){
+	unsigned int dimension = width*height;
+	unsigned char* ret=(unsigned char*)malloc(sizeof(float)*dimension*4);
+	unsigned char* maxValues = arrayOfMaxValuesUC(dimension);
+
+	memcpy(ret,inputRGB,dimension*sizeof(float));
+	memcpy(ret+dimension*sizeof(float),inputRGB,dimension*sizeof(float));
+	memcpy(ret+2*dimension*sizeof(float),inputRGB,dimension*sizeof(float));
+	memcpy(ret+3*dimension*sizeof(float),maxValues,dimension*sizeof(float));
+
+	free(maxValues);
+	free(inputRGB);
+	return ret;
+}
+
+
+//TODO not yet supported, only grayscale works somehow
+unsigned char* controlChannels(int imagechannels,int strelchannels, unsigned char* image, unsigned char* strel,int imagewidth,int imageheight,int strelwidth,int strelheight){
 	if(imagechannels==1){
 		printf("grayscale image with only one channel, doing transformation to 4 channels");
-		image = grayscale2RGBA(image,imagewidth,imageheight);
-		imagechannels=4;
+		return grayscale2RGBA(image,imagewidth,imageheight);
 	}
 	if(strelchannels==1){
 		printf("grayscale strel image with only one channel, doing transformation to 4 channels");
-		strel = grayscale2RGBA(strel,strelwidth,strelheight);
-		imagechannels=4;
+		return grayscale2RGBA(strel,strelwidth,strelheight);
+		
 	}
+	if(imagechannels==2){
+		printf("grayscale image with only one channel, doing transformation to 4 channels");
+		return GA2RGBA(image,imagewidth,imageheight);
+	}
+	if(strelchannels==2){
+		printf("grayscale strel image with only one channel, doing transformation to 4 channels");
+		return GA2RGBA(strel,strelwidth,strelheight);
+		
+	}
+
+	if(imagechannels==3){
+		printf("grayscale image with only one channel, doing transformation to 4 channels");
+		return RGB2RGBA(image,imagewidth,imageheight);
+	}
+	if(strelchannels==3){
+		printf("grayscale strel image with only one channel, doing transformation to 4 channels");
+		return RGB2RGBA(strel,strelwidth,strelheight);
+		
+	}
+
+	/*if (imagechannels < 3) {
+                fprintf(stderr, "source image must have 4 channels (<RGB,alpha> or some other format with transparency and 3 channels for color space)\n");
+                exit(1);
+        }*/
+}
+
+void loggingChannels(int imagechannels,int strelchannels){
+	if(imagechannels==1){
+		printf("grayscale image with only one channel\n");
+	}
+	if(strelchannels==1){
+		printf("grayscale strel image with only one channel\n");
+		
+	}
+	if(imagechannels==2){
+		printf("grayscale alpha image with only one channel and transparency\n");
+	}
+	if(strelchannels==2){
+		printf("grayscale alpha strel image with only one channel and transparency\n");
+		
+	}
+
+	if(imagechannels==3){
+		printf("RGB image with 3 channels\n");
+	}
+	if(strelchannels==3){
+		printf("RGB strel image with 3 channels\n");
+		
+	}
+}
+
+unsigned char * fullErosion(unsigned char* image,unsigned char* strel,int imagewidth,int imageheight,int imagechannels,int strelwidth, int strelheight,int strelchannels){
+
+	loggingChannels(imagechannels,strelchannels);
 
 	if(image==NULL){
 		printf("error while loading the image, probably image does not exists\n");
@@ -157,7 +240,7 @@ unsigned char * fullErosion(unsigned char* image,unsigned char* strel,int imagew
 		exit(1);
 	}
 	printf("image loaded with  %i width, %i height and %i channels\n",imagewidth,imageheight,imagechannels);
-	if (imagechannels < 3) {
+	if (imagechannels <= 3) {
                 fprintf(stderr, "source image must have 4 channels (<RGB,alpha> or some other format with transparency and 3 channels for color space)\n");
                 exit(1);
         }
@@ -267,16 +350,7 @@ unsigned char * fullErosion(unsigned char* image,unsigned char* strel,int imagew
 
 unsigned char * fullDilation(unsigned char* image,unsigned char* strel,int imagewidth,int imageheight,int imagechannels,int strelwidth, int strelheight,int strelchannels){
 
-	if(imagechannels==1){
-		printf("grayscale image with only one channel, doing transformation to 4 channels");
-		image = grayscale2RGBA(image,imagewidth,imageheight);
-		imagechannels=4;
-	}
-	if(strelchannels==1){
-		printf("grayscale strel image with only one channel, doing transformation to 4 channels");
-		strel = grayscale2RGBA(strel,strelwidth,strelheight);
-		imagechannels=4;
-	}
+	loggingChannels(imagechannels,strelchannels);
 
 	if(image==NULL){
 		printf("error while loading the image, probably image does not exists\n");
@@ -287,7 +361,7 @@ unsigned char * fullDilation(unsigned char* image,unsigned char* strel,int image
 		exit(1);
 	}
 	printf("image loaded with  %i width, %i height and %i channels\n",imagewidth,imageheight,imagechannels);
-	if (imagechannels < 3) {
+	if (imagechannels <= 3) {
                 fprintf(stderr, "source image must have 4 channels (<RGB,alpha> or some other format with transparency and 3 channels for color space)\n");
                 exit(1);
         }
@@ -397,16 +471,7 @@ unsigned char * fullDilation(unsigned char* image,unsigned char* strel,int image
 
 unsigned char * fullGradient(unsigned char* image,unsigned char* strel,int imagewidth,int imageheight,int imagechannels,int strelwidth, int strelheight,int strelchannels){
 
-	if(imagechannels==1){
-		printf("grayscale image with only one channel, doing transformation to 4 channels");
-		image = grayscale2RGBA(image,imagewidth,imageheight);
-		imagechannels=4;
-	}
-	if(strelchannels==1){
-		printf("grayscale strel image with only one channel, doing transformation to 4 channels");
-		strel = grayscale2RGBA(strel,strelwidth,strelheight);
-		imagechannels=4;
-	}
+	loggingChannels(imagechannels,strelchannels);
 
 	if(image==NULL){
 		printf("error while loading the image, probably image does not exists\n");
@@ -417,7 +482,7 @@ unsigned char * fullGradient(unsigned char* image,unsigned char* strel,int image
 		exit(1);
 	}
 	printf("image loaded with  %i width, %i height and %i channels\n",imagewidth,imageheight,imagechannels);
-	if (imagechannels < 3) {
+	if (imagechannels <= 3) {
                 fprintf(stderr, "source image must have 4 channels (<RGB,alpha> or some other format with transparency and 3 channels for color space)\n");
                 exit(1);
         }
@@ -567,16 +632,7 @@ unsigned char * fullGradient(unsigned char* image,unsigned char* strel,int image
 
 unsigned char * fullClosing(unsigned char* image,unsigned char* strel,int imagewidth,int imageheight,int imagechannels,int strelwidth, int strelheight,int strelchannels){
 
-	if(imagechannels==1){
-		printf("grayscale image with only one channel, doing transformation to 4 channels");
-		image = grayscale2RGBA(image,imagewidth,imageheight);
-		imagechannels=4;
-	}
-	if(strelchannels==1){
-		printf("grayscale strel image with only one channel, doing transformation to 4 channels");
-		strel = grayscale2RGBA(strel,strelwidth,strelheight);
-		imagechannels=4;
-	}
+	loggingChannels(imagechannels,strelchannels);
 
 	if(image==NULL){
 		printf("error while loading the image, probably image does not exists\n");
@@ -587,7 +643,7 @@ unsigned char * fullClosing(unsigned char* image,unsigned char* strel,int imagew
 		exit(1);
 	}
 	printf("image loaded with  %i width, %i height and %i channels\n",imagewidth,imageheight,imagechannels);
-	if (imagechannels < 3) {
+	if (imagechannels <= 3) {
                 fprintf(stderr, "source image must have 4 channels (<RGB,alpha> or some other format with transparency and 3 channels for color space)\n");
                 exit(1);
         }
@@ -721,16 +777,7 @@ unsigned char * fullClosing(unsigned char* image,unsigned char* strel,int imagew
 
 unsigned char * fullOpening(unsigned char* image,unsigned char* strel,int imagewidth,int imageheight,int imagechannels,int strelwidth, int strelheight,int strelchannels){
 
-	if(imagechannels==1){
-		printf("grayscale image with only one channel, doing transformation to 4 channels");
-		image = grayscale2RGBA(image,imagewidth,imageheight);
-		imagechannels=4;
-	}
-	if(strelchannels==1){
-		printf("grayscale strel image with only one channel, doing transformation to 4 channels");
-		strel = grayscale2RGBA(strel,strelwidth,strelheight);
-		imagechannels=4;
-	}
+	loggingChannels(imagechannels,strelchannels);
 
 	if(image==NULL){
 		printf("error while loading the image, probably image does not exists\n");
@@ -741,7 +788,7 @@ unsigned char * fullOpening(unsigned char* image,unsigned char* strel,int imagew
 		exit(1);
 	}
 	printf("image loaded with  %i width, %i height and %i channels\n",imagewidth,imageheight,imagechannels);
-	if (imagechannels < 3) {
+	if (imagechannels <= 3) {
                 fprintf(stderr, "source image must have 4 channels (<RGB,alpha> or some other format with transparency and 3 channels for color space)\n");
                 exit(1);
         }
@@ -874,4 +921,70 @@ unsigned char * fullOpening(unsigned char* image,unsigned char* strel,int imagew
 	//stbi_image_free(image);
 	//stbi_image_free(strel);
 	return returnedArray;
+}
+
+unsigned char* morphOperation(const char* imagename,const char* strelname,const char* method,int*finalwidth,int*finalheight,int*finalchannels){
+	int width,height,channels,strelwidth,strelheight,strelchannels;
+	// caricamento immagine in memoria come array di unsigned char
+	unsigned char * img= stbi_load(imagename,&width,&height,&channels,STBI_rgb_alpha);
+
+	unsigned char * imgstrel= stbi_load(strelname,&strelwidth,&strelheight,&strelchannels,STBI_rgb_alpha);
+
+	unsigned char* processed=NULL;
+	
+    if(strstr(method,"erosion")){
+		processed = fullErosion(img,imgstrel,width,height,channels,strelwidth,strelheight,strelchannels);
+		if(processed==NULL){
+			fprintf(stderr,"problems in method for erosion\n");
+			exit(1);
+		}
+    }
+    if(strstr(method,"dilation")){
+        processed = fullDilation(img,imgstrel,width,height,channels,strelwidth,strelheight,strelchannels);
+		if(processed==NULL){
+			fprintf(stderr,"problems in method for dilation\n");
+			exit(1);
+		}
+    }
+    if(strstr(method,"gradient")){
+        processed = fullGradient(img,imgstrel,width,height,channels,strelwidth,strelheight,strelchannels);
+		if(processed==NULL){
+			fprintf(stderr,"problems in method for gradient\n");
+			exit(1);
+		}
+    }
+    if(strstr(method,"opening")){
+        processed = fullOpening(img,imgstrel,width,height,channels,strelwidth,strelheight,strelchannels);
+		if(processed==NULL){
+			fprintf(stderr,"problems in method for opening\n");
+			exit(1);
+		}
+    }
+    if(strstr(method,"closing")){
+        processed = fullClosing(img,imgstrel,width,height,channels,strelwidth,strelheight,strelchannels);
+		if(processed==NULL){
+			fprintf(stderr,"problems in method for closing\n");
+			exit(1);
+		}
+    }
+    if(strstr(method,"tophat")){
+        //TODO
+    }
+    if(strstr(method,"bottomhat")){
+        //TODO
+    }
+
+	if(!processed){
+		printf("the operation %s is not implemented\n",method);
+	}
+
+	stbi_image_free(img);
+	stbi_image_free(imgstrel);
+
+	*finalwidth=width;
+	*finalheight=height;
+	*finalchannels=channels;
+
+	return processed;
+
 }

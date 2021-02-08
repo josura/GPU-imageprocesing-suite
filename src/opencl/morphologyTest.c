@@ -20,6 +20,7 @@ int main(int argc, char ** args){
 
 	unsigned char * imgstrel= stbi_load(args[2],&strelwidth,&strelheight,&strelchannels,STBI_rgb_alpha);
 
+
 	//EROSION TEST
     unsigned char * processedErosion = fullErosion(img,imgstrel,width,height,channels,strelwidth,strelheight,strelchannels);
     if(processedErosion==NULL){
@@ -85,3 +86,4 @@ int main(int argc, char ** args){
     stbi_image_free(processedClosing);*/
 
 }
+

@@ -17,6 +17,7 @@ public:
     explicit SecWindowImage(QWidget *parent = nullptr);
     ~SecWindowImage();
     bool setImage(QString name);
+    bool passImage(unsigned char* image,int imageWidth,int imageHeight);
 
 private:
     Ui::SecWindowImage *ui;

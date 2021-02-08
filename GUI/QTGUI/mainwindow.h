@@ -3,8 +3,14 @@
 
 #include <QMainWindow>
 #include <QMessageBox>
+#include <QBuffer>
 #include "secwindowimage.h"
 #include<QPixmap>
+//#include "../../src/opencl/morphology.h"    //TODO linking the libraries, all the code included generates too many errors
+#include<QProcess>
+#include<QFileDialog>
+#include <QDir>
+
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
 QT_END_NAMESPACE
@@ -16,7 +22,7 @@ class MainWindow : public QMainWindow
 public:
     MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
-    QString imageName=NULL,strelName=NULL;
+    QString imageName=NULL,strelName=NULL,processedName=NULL;
     void setImage(const QString name);
     void setStrel(const QString strelname);
     void showImage();
@@ -27,8 +33,14 @@ private slots:
 
     void on_pushButton_2_clicked();
 
+    void on_pushButton_3_clicked();
+
 private:
     Ui::MainWindow *ui;
     SecWindowImage * imageDialog;
+    uchar* normalImage, * strelImage, * processedImage;
+    int processedImageWidth,processedImageHeight;
+    int normalImageWidth,normalImageHeight;
+    int strelImageWidth,strelImageHeight;
 };
 #endif // MAINWINDOW_H
