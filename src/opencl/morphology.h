@@ -923,6 +923,356 @@ unsigned char * fullOpening(unsigned char* image,unsigned char* strel,int imagew
 	return returnedArray;
 }
 
+unsigned char * fullTophat(unsigned char* image,unsigned char* strel,int imagewidth,int imageheight,int imagechannels,int strelwidth, int strelheight,int strelchannels){
+
+	loggingChannels(imagechannels,strelchannels);
+
+	if(image==NULL){
+		printf("error while loading the image, probably image does not exists\n");
+		exit(1);
+	}
+	if(strel==NULL){
+		printf("error while loading the image strel, probably image does not exists\n");
+		exit(1);
+	}
+	printf("image loaded with  %i width, %i height and %i channels\n",imagewidth,imageheight,imagechannels);
+	if (imagechannels <= 3) {
+                fprintf(stderr, "source image must have 4 channels (<RGB,alpha> or some other format with transparency and 3 channels for color space)\n");
+                exit(1);
+        }
+	unsigned char * outimg = NULL;
+	int data_size=imagewidth*imageheight*imagechannels;
+	int dstwidth=imagewidth,dstheight=imageheight;
+	int dstdata_size=dstwidth*dstheight*imagechannels;
+	cl_platform_id p = select_platform();
+	cl_device_id d = select_device(p);
+	cl_context ctx = create_context(p, d);
+	cl_command_queue que = create_queue(ctx, d);
+	cl_program prog = create_program("morphology.ocl", ctx, d);
+	int err=0;
+	cl_kernel erosion_k = NULL,dilation_k=NULL,difference_k=NULL;
+	erosion_k = clCreateKernel(prog, "erosionImage", &err);
+	ocl_check(err, "create kernel erosion image");
+	dilation_k = clCreateKernel(prog, "dilationImage", &err);
+	ocl_check(err, "create kernel dilation image");
+	difference_k = clCreateKernel(prog, "imageDifference", &err);
+    ocl_check(err, "create kernel difference image");
+	/* get information about the preferred work-group size multiple */
+	err = clGetKernelWorkGroupInfo(dilation_k, d,
+		CL_KERNEL_PREFERRED_WORK_GROUP_SIZE_MULTIPLE,
+		sizeof(gws_align), &gws_align, NULL);
+	ocl_check(err, "preferred wg multiple for erosion");
+
+	cl_mem d_input = NULL, d_output = NULL, d_tmp = NULL;
+
+	const cl_image_format fmt = {
+		.image_channel_order = CL_RGBA,
+		.image_channel_data_type = CL_UNORM_INT8,
+	};
+	const cl_image_desc desc = {
+		.image_type = CL_MEM_OBJECT_IMAGE2D,
+		.image_width = imagewidth,
+		.image_height = imageheight,
+		//.image_row_pitch = src.data_size/src.height,
+	};
+	d_input = clCreateImage(ctx,
+		CL_MEM_READ_ONLY | CL_MEM_HOST_WRITE_ONLY | CL_MEM_USE_HOST_PTR,
+		&fmt, &desc,
+		image,
+		&err);
+	ocl_check(err, "create image d_input");
+
+
+	//SEZIONE STRUCTURING ELEMENT
+	cl_mem d_strel=NULL;
+	
+
+
+	const cl_image_format fmt_strel = {
+		.image_channel_order = CL_RGBA,
+		.image_channel_data_type = CL_UNORM_INT8,
+	};
+	const cl_image_desc strel_desc = {
+		.image_type = CL_MEM_OBJECT_IMAGE2D,
+		.image_width = strelwidth,
+		.image_height = strelheight,
+		//.image_row_pitch = src.data_size/src.height,
+	};
+	d_strel = clCreateImage(ctx,
+		CL_MEM_READ_ONLY | CL_MEM_HOST_WRITE_ONLY | CL_MEM_USE_HOST_PTR,
+		&fmt_strel, &strel_desc,
+		strel,
+		&err);
+	ocl_check(err, "create image d_input");
+
+	//FINE SEZIONE STRUCTURING ELEMENT
+	d_output = clCreateBuffer(ctx,
+	CL_MEM_WRITE_ONLY | CL_MEM_HOST_READ_ONLY | CL_MEM_ALLOC_HOST_PTR,
+	dstdata_size, NULL,
+		&err);
+	ocl_check(err, "create buffer d_output");
+
+	cl_event erosion_evt,dilation_evt, difference_evt, map_evt;
+
+
+	//EROSION
+
+	erosion_evt = erosion(erosion_k, que, d_output, d_input,d_strel, imageheight, imagewidth, strelheight,strelwidth);
+
+	outimg = clEnqueueMapBuffer(que, d_output, CL_FALSE,
+		CL_MAP_READ,
+		0, dstdata_size,
+		1, &erosion_evt, &map_evt, &err);
+	ocl_check(err, "enqueue map d_output");
+	
+
+	err = clWaitForEvents(1, &map_evt);
+	ocl_check(err, "clfinish");
+
+
+	d_tmp = clCreateImage(ctx,
+		CL_MEM_READ_ONLY | CL_MEM_HOST_WRITE_ONLY | CL_MEM_USE_HOST_PTR,
+		&fmt, &desc,
+		outimg,
+		&err);
+	ocl_check(err, "create image d_input after erosion");
+
+
+	// DILATION
+	dilation_evt = dilation(dilation_k, que, d_output, d_tmp,d_strel, imageheight, imagewidth, strelheight,strelwidth);
+
+	outimg = clEnqueueMapBuffer(que, d_output, CL_FALSE,
+		CL_MAP_READ,
+		0, dstdata_size,
+		1, &dilation_evt, &map_evt, &err);
+	ocl_check(err, "enqueue map d_output");
+
+	err = clWaitForEvents(1, &map_evt);
+	ocl_check(err, "clfinish");
+
+	clReleaseMemObject(d_tmp);
+
+    d_tmp = clCreateImage(ctx,
+		CL_MEM_READ_ONLY | CL_MEM_HOST_WRITE_ONLY | CL_MEM_USE_HOST_PTR,
+		&fmt, &desc,
+		outimg,
+		&err);
+	ocl_check(err, "create image d_tmp");
+
+	//DIFFERENCE
+
+	difference_evt = difference(difference_k, que, d_output, d_input,d_tmp, imageheight, imagewidth, imageheight,imagewidth);
+
+    outimg = clEnqueueMapBuffer(que, d_output, CL_FALSE,
+		CL_MAP_READ,
+		0, dstdata_size,
+		1, &erosion_evt, &map_evt, &err);
+	ocl_check(err, "enqueue map d_output");
+
+	err = clWaitForEvents(1, &map_evt);
+	ocl_check(err, "clfinish");
+
+	unsigned char * returnedArray=malloc(imagewidth*imageheight*4);
+
+	memcpy(returnedArray,outimg,imagewidth*imageheight*4);
+
+
+	err = clEnqueueUnmapMemObject(que, d_output, outimg,
+		0, NULL, NULL);
+	ocl_check(err, "unmap output");
+
+	clReleaseMemObject(d_output);
+	clReleaseMemObject(d_input);
+	clReleaseMemObject(d_strel);
+	clReleaseMemObject(d_tmp);
+	clReleaseKernel(dilation_k);
+	clReleaseKernel(erosion_k);
+	clReleaseKernel(difference_k);
+	clReleaseProgram(prog);
+	clReleaseCommandQueue(que);
+	clReleaseContext(ctx);
+
+	//stbi_image_free(image);
+	//stbi_image_free(strel);
+	return returnedArray;
+}
+
+unsigned char * fullBottomhat(unsigned char* image,unsigned char* strel,int imagewidth,int imageheight,int imagechannels,int strelwidth, int strelheight,int strelchannels){
+
+	loggingChannels(imagechannels,strelchannels);
+
+	if(image==NULL){
+		printf("error while loading the image, probably image does not exists\n");
+		exit(1);
+	}
+	if(strel==NULL){
+		printf("error while loading the image strel, probably image does not exists\n");
+		exit(1);
+	}
+	printf("image loaded with  %i width, %i height and %i channels\n",imagewidth,imageheight,imagechannels);
+	if (imagechannels <= 3) {
+                fprintf(stderr, "source image must have 4 channels (<RGB,alpha> or some other format with transparency and 3 channels for color space)\n");
+                exit(1);
+        }
+	unsigned char * outimg = NULL;
+	int data_size=imagewidth*imageheight*imagechannels;
+	int dstwidth=imagewidth,dstheight=imageheight;
+	int dstdata_size=dstwidth*dstheight*imagechannels;
+	cl_platform_id p = select_platform();
+	cl_device_id d = select_device(p);
+	cl_context ctx = create_context(p, d);
+	cl_command_queue que = create_queue(ctx, d);
+	cl_program prog = create_program("morphology.ocl", ctx, d);
+	int err=0;
+	cl_kernel erosion_k = NULL,dilation_k=NULL,difference_k=NULL;
+	erosion_k = clCreateKernel(prog, "erosionImage", &err);
+	ocl_check(err, "create kernel erosion image");
+	dilation_k = clCreateKernel(prog, "dilationImage", &err);
+	ocl_check(err, "create kernel dilation image");
+	difference_k = clCreateKernel(prog, "imageDifference", &err);
+    ocl_check(err, "create kernel difference image");
+	/* get information about the preferred work-group size multiple */
+	err = clGetKernelWorkGroupInfo(dilation_k, d,
+		CL_KERNEL_PREFERRED_WORK_GROUP_SIZE_MULTIPLE,
+		sizeof(gws_align), &gws_align, NULL);
+	ocl_check(err, "preferred wg multiple for erosion");
+
+	cl_mem d_input = NULL, d_output = NULL, d_tmp = NULL;
+
+	const cl_image_format fmt = {
+		.image_channel_order = CL_RGBA,
+		.image_channel_data_type = CL_UNORM_INT8,
+	};
+	const cl_image_desc desc = {
+		.image_type = CL_MEM_OBJECT_IMAGE2D,
+		.image_width = imagewidth,
+		.image_height = imageheight,
+		//.image_row_pitch = src.data_size/src.height,
+	};
+	d_input = clCreateImage(ctx,
+		CL_MEM_READ_ONLY | CL_MEM_HOST_WRITE_ONLY | CL_MEM_USE_HOST_PTR,
+		&fmt, &desc,
+		image,
+		&err);
+	ocl_check(err, "create image d_input");
+
+
+	//SEZIONE STRUCTURING ELEMENT
+	cl_mem d_strel=NULL;
+	
+
+
+	const cl_image_format fmt_strel = {
+		.image_channel_order = CL_RGBA,
+		.image_channel_data_type = CL_UNORM_INT8,
+	};
+	const cl_image_desc strel_desc = {
+		.image_type = CL_MEM_OBJECT_IMAGE2D,
+		.image_width = strelwidth,
+		.image_height = strelheight,
+		//.image_row_pitch = src.data_size/src.height,
+	};
+	d_strel = clCreateImage(ctx,
+		CL_MEM_READ_ONLY | CL_MEM_HOST_WRITE_ONLY | CL_MEM_USE_HOST_PTR,
+		&fmt_strel, &strel_desc,
+		strel,
+		&err);
+	ocl_check(err, "create image d_input");
+
+	//FINE SEZIONE STRUCTURING ELEMENT
+	d_output = clCreateBuffer(ctx,
+	CL_MEM_WRITE_ONLY | CL_MEM_HOST_READ_ONLY | CL_MEM_ALLOC_HOST_PTR,
+	dstdata_size, NULL,
+		&err);
+	ocl_check(err, "create buffer d_output");
+
+	cl_event erosion_evt,dilation_evt, difference_evt, map_evt;
+
+
+	// DILATION
+	dilation_evt = dilation(dilation_k, que, d_output, d_input,d_strel, imageheight, imagewidth, strelheight,strelwidth);
+
+	outimg = clEnqueueMapBuffer(que, d_output, CL_FALSE,
+		CL_MAP_READ,
+		0, dstdata_size,
+		1, &dilation_evt, &map_evt, &err);
+	ocl_check(err, "enqueue map d_output");
+
+	err = clWaitForEvents(1, &map_evt);
+	ocl_check(err, "clfinish");
+
+
+	d_tmp = clCreateImage(ctx,
+		CL_MEM_READ_ONLY | CL_MEM_HOST_WRITE_ONLY | CL_MEM_USE_HOST_PTR,
+		&fmt, &desc,
+		outimg,
+		&err);
+	ocl_check(err, "create image d_input after erosion");
+
+
+	
+
+	//EROSION
+
+	erosion_evt = erosion(erosion_k, que, d_output, d_tmp,d_strel, imageheight, imagewidth, strelheight,strelwidth);
+
+	outimg = clEnqueueMapBuffer(que, d_output, CL_FALSE,
+		CL_MAP_READ,
+		0, dstdata_size,
+		1, &erosion_evt, &map_evt, &err);
+	ocl_check(err, "enqueue map d_output");
+	
+
+	err = clWaitForEvents(1, &map_evt);
+	ocl_check(err, "clfinish");
+
+	clReleaseMemObject(d_tmp);
+
+    d_tmp = clCreateImage(ctx,
+		CL_MEM_READ_ONLY | CL_MEM_HOST_WRITE_ONLY | CL_MEM_USE_HOST_PTR,
+		&fmt, &desc,
+		outimg,
+		&err);
+	ocl_check(err, "create image d_tmp");
+
+	//DIFFERENCE
+
+	difference_evt = difference(difference_k, que, d_output, d_tmp, d_input, imageheight, imagewidth, imageheight,imagewidth);
+
+    outimg = clEnqueueMapBuffer(que, d_output, CL_FALSE,
+		CL_MAP_READ,
+		0, dstdata_size,
+		1, &erosion_evt, &map_evt, &err);
+	ocl_check(err, "enqueue map d_output");
+
+	err = clWaitForEvents(1, &map_evt);
+	ocl_check(err, "clfinish");
+
+	unsigned char * returnedArray=malloc(imagewidth*imageheight*4);
+
+	memcpy(returnedArray,outimg,imagewidth*imageheight*4);
+
+
+	err = clEnqueueUnmapMemObject(que, d_output, outimg,
+		0, NULL, NULL);
+	ocl_check(err, "unmap output");
+
+	clReleaseMemObject(d_output);
+	clReleaseMemObject(d_input);
+	clReleaseMemObject(d_strel);
+	clReleaseMemObject(d_tmp);
+	clReleaseKernel(dilation_k);
+	clReleaseKernel(erosion_k);
+	clReleaseKernel(difference_k);
+	clReleaseProgram(prog);
+	clReleaseCommandQueue(que);
+	clReleaseContext(ctx);
+
+	//stbi_image_free(image);
+	//stbi_image_free(strel);
+	return returnedArray;
+}
+
 unsigned char* morphOperation(const char* imagename,const char* strelname,const char* method,int*finalwidth,int*finalheight,int*finalchannels){
 	int width,height,channels,strelwidth,strelheight,strelchannels;
 	// caricamento immagine in memoria come array di unsigned char
@@ -930,7 +1280,7 @@ unsigned char* morphOperation(const char* imagename,const char* strelname,const 
 
 	unsigned char * imgstrel= stbi_load(strelname,&strelwidth,&strelheight,&strelchannels,STBI_rgb_alpha);
 
-	unsigned char* processed=NULL;
+	unsigned char * processed=NULL;
 	
     if(strstr(method,"erosion")){
 		processed = fullErosion(img,imgstrel,width,height,channels,strelwidth,strelheight,strelchannels);
@@ -968,10 +1318,18 @@ unsigned char* morphOperation(const char* imagename,const char* strelname,const 
 		}
     }
     if(strstr(method,"tophat")){
-        //TODO
+        processed = fullTophat(img,imgstrel,width,height,channels,strelwidth,strelheight,strelchannels);
+		if(processed==NULL){
+			fprintf(stderr,"problems in method for tophat\n");
+			exit(1);
+		}
     }
     if(strstr(method,"bottomhat")){
-        //TODO
+        processed = fullBottomhat(img,imgstrel,width,height,channels,strelwidth,strelheight,strelchannels);
+		if(processed==NULL){
+			fprintf(stderr,"problems in method for bottomhat\n");
+			exit(1);
+		}
     }
 
 	if(!processed){

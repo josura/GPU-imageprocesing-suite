@@ -30,29 +30,43 @@ int main(int argc, char ** args){
 
 	//DILATION TEST
 	unsigned char * processedDilation = fullDilation(img,imgstrel,width,height,channels,strelwidth,strelheight,strelchannels);
-    if(processedErosion==NULL){
+    if(processedDilation==NULL){
         fprintf(stderr,"problems in method for dilation\n");
         exit(1);
     }
 
 	//GRADIENT TEST
 	unsigned char * processedGradient = fullGradient(img,imgstrel,width,height,channels,strelwidth,strelheight,strelchannels);
-    if(processedErosion==NULL){
+    if(processedGradient==NULL){
         fprintf(stderr,"problems in method for gradient\n");
         exit(1);
     }
 
 	//CLOSING TEST
 	unsigned char * processedClosing = fullClosing(img,imgstrel,width,height,channels,strelwidth,strelheight,strelchannels);
-    if(processedErosion==NULL){
+    if(processedClosing==NULL){
         fprintf(stderr,"problems in method for closing\n");
         exit(1);
     }
 
 	//OPENING TEST
 	unsigned char * processedOpening = fullOpening(img,imgstrel,width,height,channels,strelwidth,strelheight,strelchannels);
-    if(processedErosion==NULL){
+    if(processedOpening==NULL){
         fprintf(stderr,"problems in method for opening\n");
+        exit(1);
+    }
+
+    //TOPHAT TEST
+	unsigned char * processedTophat = fullTophat(img,imgstrel,width,height,channels,strelwidth,strelheight,strelchannels);
+    if(processedTophat==NULL){
+        fprintf(stderr,"problems in method for tophat\n");
+        exit(1);
+    }
+
+    //BOTTOMHAT TEST
+	unsigned char * processedBottomhat = fullBottomhat(img,imgstrel,width,height,channels,strelwidth,strelheight,strelchannels);
+    if(processedBottomhat==NULL){
+        fprintf(stderr,"problems in method for bottomhat\n");
         exit(1);
     }
     
@@ -76,6 +90,14 @@ int main(int argc, char ** args){
 	sprintf(buffer,"Closing%s",args[3]);
 	stbi_write_png(buffer,width,height,channels,processedClosing,channels*width);
     printf("closing image saved as %s\n",buffer);
+
+    sprintf(buffer,"tophat%s",args[3]);
+	stbi_write_png(buffer,width,height,channels,processedTophat,channels*width);
+    printf("tophat image saved as %s\n",buffer);
+
+    sprintf(buffer,"bottomhat%s",args[3]);
+	stbi_write_png(buffer,width,height,channels,processedBottomhat,channels*width);
+    printf("bottomhat image saved as %s\n",buffer);
 
     stbi_image_free(img);
     stbi_image_free(imgstrel);
