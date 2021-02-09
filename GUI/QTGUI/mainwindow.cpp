@@ -10,7 +10,8 @@ MainWindow::MainWindow(QWidget *parent)
     QStringList operations;
     operations<<"erosion"<<"dilation"<<"gradient"<<"opening"<<"closing"<<"tophat"<<"bottomhat";
     ui->comboBox->addItems(operations);
-    changed=false;
+    changedImage = changedStrel=false;
+    started=true;
 }
 
 MainWindow::~MainWindow()
@@ -47,8 +48,9 @@ void MainWindow::setImage(const QString name){
         imageName = name;
         normalImageHeight=image.height();
         normalImageWidth=image.width();
+        ui->Image->resize(ui->scrollAreaImage->width(),ui->scrollAreaImage->height());
         ui->Image ->setPixmap(QPixmap::fromImage(image).scaled(ui->scrollAreaImage->width(),ui->scrollAreaImage->height()));
-        changed=true;
+        changedImage=true;
     }
 }
 
@@ -84,7 +86,7 @@ void MainWindow::setStrel(const QString strelname){
         strelName = strelname;
         strelImageHeight=strelimage.height();
         strelImageWidth=strelimage.width();
-        changed=true;
+        changedStrel=true;
     }
 }
 
@@ -94,6 +96,7 @@ void MainWindow::on_pushButton_clicked()
 {
     this->setImage( ui->lineEdit->text());
     this->setStrel( ui->lineEdit_2->text());
+    if(changedImage && changedStrel)started=false;
     QString operation=ui->comboBox->currentText();
     /*char* charOperation=operation.toLocal8Bit().data();
     unsigned char* tmp = morphOperation(imageName.toLocal8Bit().data(),strelName.toLocal8Bit().data(),charOperation);
@@ -102,7 +105,7 @@ void MainWindow::on_pushButton_clicked()
     } else {
            QMessageBox::critical(this," error","error processing "+imageName+" with strel"+strelName);
     }*/
-    if(changed){
+    if((changedStrel || changedImage) && !started){
         QObject *parentProc=nullptr;
         QStringList arguments;
         arguments << ui->lineEdit->text() << ui->lineEdit_2->text() << "/tmp/processedImage.png" << operation;
@@ -115,9 +118,11 @@ void MainWindow::on_pushButton_clicked()
         }else{
             processedName = "/tmp/processedImage.png";
             QImage procImage(processedName);
-            ui->processedImage ->setPixmap(QPixmap::fromImage(procImage).scaled(ui->scrollAreaImage->width(),ui->scrollAreaImage->height()));
+            ui->processedImage->resize(ui->scrollAreaProcessed->width(),ui->scrollAreaProcessed->height());
+            ui->processedImage ->setPixmap(QPixmap::fromImage(procImage).scaled(ui->scrollAreaProcessed->width(),ui->scrollAreaProcessed->height()));
         }
-        changed=false;
+        changedImage=false;
+        changedStrel=false;
     }
 
 
