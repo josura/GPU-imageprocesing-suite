@@ -6,7 +6,7 @@
 #include <QBuffer>
 #include "secwindowimage.h"
 #include<QPixmap>
-//#include "../../src/opencl/morphology.h"    //TODO linking the libraries, all the code included generates too many errors
+//#include "../../src/opencl/morph/morphology.h"    //TODO linking the libraries, all the code included generates too many errors
 #include<QProcess>
 #include<QFileDialog>
 #include <QDir>

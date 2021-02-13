@@ -111,15 +111,24 @@ void MainWindow::on_pushButton_clicked()
         arguments << ui->lineEdit->text() << ui->lineEdit_2->text() << "/tmp/processedImage.png" << operation;
 
         QProcess * morphing= new QProcess(parentProc);
-        morphing->setWorkingDirectory("../../src/opencl/");
-        morphing->start("../../src/opencl/morphology",arguments);
+        QFileInfo workdir("../../src/opencl/morph/");
+        QFileInfo procdir("../../src/opencl//morph/morphology");
+        QString wd = workdir.absolutePath();
+        QString se = procdir.absoluteFilePath();
+        morphing->setWorkingDirectory(wd);
+        morphing->start(se,arguments);
         if(!morphing->waitForFinished()){
-            QMessageBox::critical(this," error","error processing "+imageName+" with strel"+strelName);
+            QMessageBox::critical(this," error","error processing "+imageName+" with strel"+strelName+
+                                   " the error"+ morphing->errorString() + " occured, program exited with exit status " + QString( morphing->exitCode()));
         }else{
             processedName = "/tmp/processedImage.png";
             QImage procImage(processedName);
-            ui->processedImage->resize(ui->scrollAreaProcessed->width(),ui->scrollAreaProcessed->height());
-            ui->processedImage ->setPixmap(QPixmap::fromImage(procImage).scaled(ui->scrollAreaProcessed->width(),ui->scrollAreaProcessed->height()));
+            if(procImage.isNull()){
+                QMessageBox::critical(this," processed image not found","the processed image "+processedName+" was not found");
+            } else {
+                ui->processedImage->resize(ui->scrollAreaProcessed->width(),ui->scrollAreaProcessed->height());
+                ui->processedImage ->setPixmap(QPixmap::fromImage(procImage).scaled(ui->scrollAreaProcessed->width(),ui->scrollAreaProcessed->height()));
+            }
         }
         changedImage=false;
         changedStrel=false;
