@@ -1,0 +1,126 @@
+const sampler_t sampler =
+	CLK_NORMALIZED_COORDS_FALSE |
+	CLK_ADDRESS_CLAMP_TO_EDGE|
+	CLK_FILTER_LINEAR;
+
+
+
+//MWC64x, an RNG made by David B. Tomas, with custom seeding
+//Source: http://cas.ee.ic.ac.uk/people/dt10/research/rngs-gpu-mwc64x.html
+
+typedef struct{ uint4 x; uint4 c; } mwc64xvec4_state_t;
+
+inline float4 MWC64XVEC4(mwc64xvec4_state_t *s, float leftLimit, float rightLimit)
+{
+    enum{ MWC64XVEC4_A = 4294883355U };
+    uint4 x=s->x, c=s->c;
+    uint4 res=x^c;                     // Calculate the result
+    uint4 hi=mul_hi(x,MWC64XVEC4_A);              // Step the RNG
+    x=x*MWC64XVEC4_A+c;
+    c=hi+convert_uint4(x<c);
+    s->x=x;
+    s->c=c;             // Pack the state back up
+    return leftLimit + convert_float4(res)*((rightLimit - leftLimit)/4294967295);
+}
+
+//Another simple RNG (often used in hashing) to randomize local id or global id
+inline uint randomizeId(uint id)
+{
+        id = (id ^ 61) ^ (id >> 16);
+        id *= 9;
+        id = id ^ (id >> 4);
+        id *= 0x27d4eb2d;
+        id = id ^ (id >> 15);
+        return id;
+ }
+
+//Mix seeds with randomized global id
+inline void MWC64XVEC4_Seeding(mwc64xvec4_state_t *s, int gi, uint4 seeds){
+	s->x = (uint4)((seeds.x) ^ randomizeId(gi), (seeds.y*seeds.z) ^ randomizeId(gi), (seeds.y*(seeds.w & 131071)) ^ randomizeId(gi), ((seeds.x & 131071)*seeds.y) ^ randomizeId(gi));
+	s->c = (uint4)((seeds.w) ^ randomizeId(gi), (seeds.w ^ seeds.x) ^ randomizeId(gi), (seeds.z*seeds.x) ^ randomizeId(gi), (seeds.z*(seeds.w & 131071)) ^ randomizeId(gi));
+}
+
+void kernel random_dithering(global uchar4 * restrict d_output,
+	read_only image2d_t d_input,
+	uchar num_levels, uint4 seeds)
+{
+	const int i = get_global_id(0);
+	const int j = get_global_id(1);
+	const int2 dim = get_image_dim(d_input);
+
+	if (i < dim.x && j < dim.y) {
+
+		const int gi = j*dim.x+i;
+
+		mwc64xvec4_state_t rng;
+		MWC64XVEC4_Seeding(&rng, gi, seeds);
+	
+		const float p = 256.0f/num_levels;
+		const float p_half = p/2;
+
+		const float4 dither = MWC64XVEC4(&rng, -p_half, p_half);
+		const uint4 px = read_imageui(d_input, sampler, (int2)(i,j));
+
+		//Preserve alpha
+		const uchar alpha_val = (uchar)(px.w);
+
+		const float4 newpx = convert_float4(px)+dither;
+
+		//Quantize to num_levels
+		const uchar4 qtpx = convert_uchar4(floor((newpx/256)*num_levels)*p);
+
+		qtpx.w = alpha_val;
+
+		d_output[gi] = qtpx;
+
+	}
+}
+
+void kernel ordered_dithering(global uchar4 * restrict d_output,
+	read_only image2d_t d_input, int matrix_dim,
+	uchar num_levels)
+{
+	const int i = get_global_id(0);
+	const int j = get_global_id(1);
+	const int2 dim = get_image_dim(d_input);
+
+	if (i < dim.x && j < dim.y) {
+
+		const int gi = j*dim.x+i;
+	
+		const float p = 256.0f/num_levels;
+
+		//Compute corresponding Bayer matrix element: quick method from https://bisqwit.iki.fi/story/howto/dither/jy/
+
+		//First compute bit length, integer M = log2(matrix_dim)
+		uint M = 0;
+		uint temp_dim = matrix_dim;
+		while(temp_dim >>= 1) ++M;
+
+		//Compute M(i, j) = bit_reverse(bit_interleave(bitwise_xor(i, j), i))
+		uint v = 0, mask = M-1;
+		const int xc = (i ^ j) & (matrix_dim-1);
+		const int yc = i & (matrix_dim-1);
+		#pragma unroll
+		for(uint bit=0; bit < 2*M; --mask){
+			v |= ((yc >> mask)&1) << bit++;
+			v |= ((xc >> mask)&1) << bit++;
+		}
+
+		const float4 dither = (float4) (((float)v)/(matrix_dim*matrix_dim)) - (float4)(0.5f);
+
+		const uint4 px = read_imageui(d_input, sampler,(int2)(i,j));
+		//Preserve alpha
+		const uchar alpha_val = (uchar)(px.w);
+
+		const float4 newpx = convert_float4(px)+dither*p;
+
+		//Quantize to num_levels
+		const uchar4 qtpx = convert_uchar4(floor((newpx/256)*num_levels)*p);
+
+		qtpx.w = alpha_val;
+
+		d_output[gi] = qtpx;
+
+	}
+}
