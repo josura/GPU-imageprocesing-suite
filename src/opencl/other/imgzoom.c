@@ -3,33 +3,33 @@
 #include <time.h>
 
 #define CL_TARGET_OPENCL_VERSION 120
-#include "ocl_boiler.h"
+#include "../ocl_boiler.h"
 
-#include "pamalign.h"
+#include "../pamalign.h"
 
-size_t gws_align_imgcopy;
+size_t gws_align_imgzoom;
 
-cl_event imgcopy(cl_kernel imgcopy_k, cl_command_queue que,
+cl_event imgzoom(cl_kernel imgzoom_k, cl_command_queue que,
 	cl_mem d_output, cl_mem d_input,
 	cl_int nrows, cl_int ncols)
 {
-	const size_t gws[] = { round_mul_up(ncols, gws_align_imgcopy), nrows };
-	cl_event imgcopy_evt;
+	const size_t gws[] = { round_mul_up(ncols, gws_align_imgzoom), nrows };
+	cl_event imgzoom_evt;
 	cl_int err;
 
 	cl_uint i = 0;
-	err = clSetKernelArg(imgcopy_k, i++, sizeof(d_output), &d_output);
-	ocl_check(err, "set imgcopy arg", i-1);
-	err = clSetKernelArg(imgcopy_k, i++, sizeof(d_input), &d_input);
-	ocl_check(err, "set imgcopy arg", i-1);
+	err = clSetKernelArg(imgzoom_k, i++, sizeof(d_output), &d_output);
+	ocl_check(err, "set imgzoom arg", i-1);
+	err = clSetKernelArg(imgzoom_k, i++, sizeof(d_input), &d_input);
+	ocl_check(err, "set imgzoom arg", i-1);
 
-	err = clEnqueueNDRangeKernel(que, imgcopy_k, 2,
+	err = clEnqueueNDRangeKernel(que, imgzoom_k, 2,
 		NULL, gws, NULL,
-		0, NULL, &imgcopy_evt);
+		0, NULL, &imgzoom_evt);
 
-	ocl_check(err, "enqueue imgcopy");
+	ocl_check(err, "enqueue imgzoom");
 
-	return imgcopy_evt;
+	return imgzoom_evt;
 }
 
 int main(int argc, char *argv[])
@@ -49,7 +49,7 @@ int main(int argc, char *argv[])
 		fprintf(stderr, "error loading %s\n", input_fname);
 		exit(1);
 	}
-	if (src.channels != 4) {
+	if (src.channels < 3) {
 		fprintf(stderr, "source must have 4 channels\n");
 		exit(1);
 	}
@@ -58,22 +58,25 @@ int main(int argc, char *argv[])
 		exit(1);
 	}
 	dst = src;
+	dst.width *= 2;
+	dst.height *= 2;
+	dst.data_size *= 4;
 	dst.data = NULL;
 
 	cl_platform_id p = select_platform();
 	cl_device_id d = select_device(p);
 	cl_context ctx = create_context(p, d);
 	cl_command_queue que = create_queue(ctx, d);
-	cl_program prog = create_program("imgcopy.ocl", ctx, d);
+	cl_program prog = create_program("imgzoom.ocl", ctx, d);
 
-	cl_kernel imgcopy_k = clCreateKernel(prog, "imgcopy", &err);
-	ocl_check(err, "create kernel imgcopy");
+	cl_kernel imgzoom_k = clCreateKernel(prog, "imgzoom", &err);
+	ocl_check(err, "create kernel imgzoom");
 
 	/* get information about the preferred work-group size multiple */
-	err = clGetKernelWorkGroupInfo(imgcopy_k, d,
+	err = clGetKernelWorkGroupInfo(imgzoom_k, d,
 		CL_KERNEL_PREFERRED_WORK_GROUP_SIZE_MULTIPLE,
-		sizeof(gws_align_imgcopy), &gws_align_imgcopy, NULL);
-	ocl_check(err, "preferred wg multiple for imgcopy");
+		sizeof(gws_align_imgzoom), &gws_align_imgzoom, NULL);
+	ocl_check(err, "preferred wg multiple for imgzoom");
 
 	cl_mem d_input = NULL, d_output = NULL;
 
@@ -99,29 +102,29 @@ int main(int argc, char *argv[])
 		&err);
 	ocl_check(err, "create buffer d_output");
 
-	cl_event imgcopy_evt, map_evt;
+	cl_event imgzoom_evt, map_evt;
 
-	imgcopy_evt = imgcopy(imgcopy_k, que, d_output, d_input, src.height, src.width);
+	imgzoom_evt = imgzoom(imgzoom_k, que, d_output, d_input, src.height, src.width);
 
 	dst.data = clEnqueueMapBuffer(que, d_output, CL_FALSE,
 		CL_MAP_READ,
 		0, dst.data_size,
-		1, &imgcopy_evt, &map_evt, &err);
+		1, &imgzoom_evt, &map_evt, &err);
 	ocl_check(err, "enqueue map d_output");
 
 	err = clWaitForEvents(1, &map_evt);
 	ocl_check(err, "clfinish");
 
-	const double runtime_imgcopy_ms = runtime_ms(imgcopy_evt);
+	const double runtime_imgzoom_ms = runtime_ms(imgzoom_evt);
 	const double runtime_map_ms = runtime_ms(map_evt);
 
-	const double imgcopy_bw_gbs = 1.0*src.data_size/1.0e6/runtime_imgcopy_ms;
-	const double map_bw_gbs = src.data_size/1.0e6/runtime_map_ms;
+	const double imgzoom_bw_gbs = 2.0*dst.data_size/1.0e6/runtime_imgzoom_ms;
+	const double map_bw_gbs = dst.data_size/1.0e6/runtime_map_ms;
 
-	printf("imgcopy: %dx%d int in %gms: %g GB/s %g GE/s\n",
-		src.height, src.width, runtime_imgcopy_ms, imgcopy_bw_gbs, src.height*src.width/1.0e6/runtime_imgcopy_ms);
+	printf("imgzoom: %dx%d int in %gms: %g GB/s %g GE/s\n",
+		src.height, src.width, runtime_imgzoom_ms, imgzoom_bw_gbs, src.height*src.width/1.0e6/runtime_imgzoom_ms);
 	printf("map: %dx%d int in %gms: %g GB/s %g GE/s\n",
-		src.height, src.width, runtime_map_ms, map_bw_gbs, src.height*src.width/1.0e6/runtime_map_ms);
+		dst.height, dst.width, runtime_map_ms, map_bw_gbs, dst.height*dst.width/1.0e6/runtime_map_ms);
 
 	err = save_pam(output_fname, &dst);
 	if (err != 0) {
@@ -135,7 +138,7 @@ int main(int argc, char *argv[])
 
 	clReleaseMemObject(d_output);
 	clReleaseMemObject(d_input);
-	clReleaseKernel(imgcopy_k);
+	clReleaseKernel(imgzoom_k);
 	clReleaseProgram(prog);
 	clReleaseCommandQueue(que);
 	clReleaseContext(ctx);

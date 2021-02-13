@@ -2,13 +2,13 @@
 #include<string.h>
 
 #define STB_IMAGE_IMPLEMENTATION
-#include"../../stb/stb_image.h" 
+#include"../../../stb/stb_image.h" 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
-#include"../../stb/stb_image_write.h" 
+#include"../../../stb/stb_image_write.h" 
 
 
 #define CL_TARGET_OPENCL_VERSION 120
-#include "ocl_boiler.h"
+#include "../ocl_boiler.h"
 
 
 size_t gws_align_imgzoom;

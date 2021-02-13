@@ -2,49 +2,46 @@
 #include<string.h>
 
 #define STB_IMAGE_IMPLEMENTATION
-#include"../../stb/stb_image.h" 
+#include"../../../stb/stb_image.h" 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
-#include"../../stb/stb_image_write.h" 
+#include"../../../stb/stb_image_write.h" 
 
 
 #define CL_TARGET_OPENCL_VERSION 120
-#include "ocl_boiler.h"
+#include "../ocl_boiler.h"
 
 
-size_t gws_align_difference;
+size_t gws_align_complement;
 
-cl_event difference(cl_kernel difference_k, cl_command_queue que,
-	cl_mem d_output, cl_mem d_input,cl_mem d_input2,
-	cl_int nrows, cl_int ncols,cl_int input2_rows,cl_int input2_cols)
+cl_event complement(cl_kernel complement_k, cl_command_queue que,
+	cl_mem d_output, cl_mem d_input,
+	cl_int nrows, cl_int ncols)
 {
-	const size_t gws[] = { round_mul_up(ncols, gws_align_difference), nrows };
-	cl_event difference_evt;
+	const size_t gws[] = { round_mul_up(ncols, gws_align_complement), nrows };
+	cl_event complement_evt;
 	cl_int err;
 
 	cl_uint i = 0;
-	err = clSetKernelArg(difference_k, i++, sizeof(d_output), &d_output);
-	ocl_check(err, "set difference arg", i-1);
-	err = clSetKernelArg(difference_k, i++, sizeof(d_input), &d_input);
-	ocl_check(err, "set difference arg", i-1);
-	err = clSetKernelArg(difference_k, i++, sizeof(d_input2), &d_input2);
-	ocl_check(err, "set difference arg", i-1);
+	err = clSetKernelArg(complement_k, i++, sizeof(d_output), &d_output);
+	ocl_check(err, "set complement arg", i-1);
+	err = clSetKernelArg(complement_k, i++, sizeof(d_input), &d_input);
+	ocl_check(err, "set complement arg", i-1);
 
-	err = clEnqueueNDRangeKernel(que, difference_k, 2,
+	err = clEnqueueNDRangeKernel(que, complement_k, 2,
 		NULL, gws, NULL,
-		0, NULL, &difference_evt);
+		0, NULL, &complement_evt);
 
-	ocl_check(err, "enqueue difference");
+	ocl_check(err, "enqueue complement");
 
-	return difference_evt;
+	return complement_evt;
 }
 
 
 
 void usage(int argc){
-	if(argc<4){
-		fprintf(stderr,"Usage: ./difference <image1.png> <image2.png>\n");
-		fprintf(stderr,"the image1 is an image with 4 channels (R,G,B,transparency)\n");
-		fprintf(stderr,"image2 is an image that is substracted to image1\n");
+	if(argc<3){
+		fprintf(stderr,"Usage: ./complement <image.png> <output.png> \n");
+		fprintf(stderr,"the image is an image with 4 channels (R,G,B,transparency)\n");
 		fprintf(stderr,"output is the name of the output image\n");
 
 		exit(1);
@@ -103,14 +100,14 @@ int main(int argc, char ** args){
 	cl_command_queue que = create_queue(ctx, d);
 	cl_program prog = create_program("morphology.ocl", ctx, d);
 	int err=0;
-	cl_kernel difference_k = NULL;
-	difference_k = clCreateKernel(prog, "imageDifference", &err);
-	ocl_check(err, "create kernel difference image");
+	cl_kernel complement_k = NULL;
+	complement_k = clCreateKernel(prog, "complement", &err);
+	ocl_check(err, "create kernel complement image");
 	/* get information about the preferred work-group size multiple */
-	err = clGetKernelWorkGroupInfo(difference_k, d,
+	err = clGetKernelWorkGroupInfo(complement_k, d,
 		CL_KERNEL_PREFERRED_WORK_GROUP_SIZE_MULTIPLE,
-		sizeof(gws_align_difference), &gws_align_difference, NULL);
-	ocl_check(err, "preferred wg multiple for difference");
+		sizeof(gws_align_complement), &gws_align_complement, NULL);
+	ocl_check(err, "preferred wg multiple for complement");
 
 	cl_mem d_input = NULL, d_output = NULL;
 
@@ -131,41 +128,7 @@ int main(int argc, char ** args){
 		&err);
 	ocl_check(err, "create image d_input");
 
-	cl_mem d_input2=NULL;
 
-	int input2_width=3,input2_height=3,input2_channels=4;
-	unsigned char * imginput2= stbi_load(args[2],&input2_width,&input2_height,&input2_channels,STBI_rgb_alpha);
-	if(imginput2==NULL){
-		printf("error loading of input2 image\n");
-		exit(1);
-	}
-	printf("image input2 loaded with width %i, height %i and channels %i\n",input2_width,input2_height,input2_channels);
-	if (input2_channels < 3) {
-                fprintf(stderr, "source input2 must have 4 channels\n");
-                exit(1);
-        }
-	if (input2_width!=width || input2_height!=height){
-		fprintf(stderr,"the images are not of the same size\n");
-		exit(1);
-	}
-
-
-	const cl_image_format fmt_input2 = {
-		.image_channel_order = CL_RGBA,
-		.image_channel_data_type = CL_UNORM_INT8,
-	};
-	const cl_image_desc input2_desc = {
-		.image_type = CL_MEM_OBJECT_IMAGE2D,
-		.image_width = input2_width,
-		.image_height = input2_height,
-		//.image_row_pitch = src.data_size/src.height,
-	};
-	d_input2 = clCreateImage(ctx,
-		CL_MEM_READ_ONLY | CL_MEM_HOST_WRITE_ONLY | CL_MEM_USE_HOST_PTR,
-		&fmt_input2, &input2_desc,
-		imginput2,
-		&err);
-	ocl_check(err, "create image d_input");
 
 	d_output = clCreateBuffer(ctx,
 		CL_MEM_WRITE_ONLY | CL_MEM_HOST_READ_ONLY | CL_MEM_ALLOC_HOST_PTR,
@@ -173,43 +136,41 @@ int main(int argc, char ** args){
 		&err);
 	ocl_check(err, "create buffer d_output");
 
-	cl_event difference_evt, map_evt;
+	cl_event complement_evt, map_evt;
 
-	difference_evt = difference(difference_k, que, d_output, d_input,d_input2, height, width, input2_height,input2_width);
+	complement_evt = complement(complement_k, que, d_output, d_input, height, width);
 
 	outimg = clEnqueueMapBuffer(que, d_output, CL_FALSE,
 		CL_MAP_READ,
 		0, dstdata_size,
-		1, &difference_evt, &map_evt, &err);
+		1, &complement_evt, &map_evt, &err);
 	ocl_check(err, "enqueue map d_output");
 
 	err = clWaitForEvents(1, &map_evt);
 	ocl_check(err, "clfinish");
 
-	const double runtime_difference_ms = runtime_ms(difference_evt);
+	const double runtime_complement_ms = runtime_ms(complement_evt);
 	const double runtime_map_ms = runtime_ms(map_evt);
 
-	const double difference_bw_gbs = dstdata_size/1.0e6/runtime_difference_ms;
+	const double complement_bw_gbs = dstdata_size/1.0e6/runtime_complement_ms;
 	const double map_bw_gbs = dstdata_size/1.0e6/runtime_map_ms;
 
-	printf("difference: %dx%d int in %gms: %g GB/s %g GE/s\n",
-		height, width, runtime_difference_ms, difference_bw_gbs, height*width/1.0e6/runtime_difference_ms);
+	printf("complement: %dx%d int in %gms: %g GB/s %g GE/s\n",
+		height, width, runtime_complement_ms, complement_bw_gbs, height*width/1.0e6/runtime_complement_ms);
 	printf("map: %dx%d int in %gms: %g GB/s %g GE/s\n",
 		dstheight, dstwidth, runtime_map_ms, map_bw_gbs, dstheight*dstwidth/1.0e6/runtime_map_ms);
 
 	char outputImage[128];
-	sprintf(outputImage,"%s",args[3]);
+	sprintf(outputImage,"%s",args[2]);
 	printf("%s\n",outputImage);
 	stbi_write_png(outputImage,dstwidth,dstheight,channels,outimg,channels*dstwidth);
-	
-
 	err = clEnqueueUnmapMemObject(que, d_output, outimg,
 		0, NULL, NULL);
 	ocl_check(err, "unmap output");
 
 	clReleaseMemObject(d_output);
 	clReleaseMemObject(d_input);
-	clReleaseKernel(difference_k);
+	clReleaseKernel(complement_k);
 	clReleaseProgram(prog);
 	clReleaseCommandQueue(que);
 	clReleaseContext(ctx);
