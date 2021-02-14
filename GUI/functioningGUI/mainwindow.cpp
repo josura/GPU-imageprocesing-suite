@@ -7,9 +7,11 @@ MainWindow::MainWindow(QWidget *parent)
 {
     ui->setupUi(this);
     ui->statusbar->showMessage("images without 4 channels not supported");
-    QStringList operations;
+    QStringList operations,operationsDither;
     operations<<"erosion"<<"dilation"<<"gradient"<<"opening"<<"closing"<<"tophat"<<"bottomhat";
+    operationsDither<<"random"<<"ordered";
     ui->comboBox->addItems(operations);
+    ui->comboBoxDither->addItems(operationsDither);//->additems(operations);
     changedImage = changedStrel=false;
     started=true;
 }
@@ -23,35 +25,25 @@ void MainWindow::setImage(const QString name){
     QImage image(name);
     if(image.isNull()){
         QMessageBox::critical(this,"image not found","the image "+name+" was not found");
-        ui->lineEdit->setText(imageName);
-    } else {
-        /*if(image.depth()/image.bytesPerLine()!=1 && image.depth()/image.bytesPerLine()!=4){
-                QMessageBox::critical(this,"image not with 1 or 4 channels","the image "+name+" is not of 4 or 1 channels");
-            } else {
 
-                //frees old array
-                free(normalImage);
-                //create uchar array of the image
-                QByteArray bytes;
-                QBuffer buffer(&bytes);
-                buffer.open(QIODevice::WriteOnly);
-
-                image.save(&buffer,"PNG");
-                buffer.close();
-                int channels = image.depth()/image.bytesPerLine();
-                normalImage = (uchar *)malloc(image.height()*image.width()*channels);
-                memcpy(normalImage,reinterpret_cast<uchar*>(bytes.data()),bytes.size());
-                normalImageHeight=image.height();
-                normalImageWidth=image.width();
-
-            }*/
+    } else if((imageName!=name)){
         imageName = name;
         normalImageHeight=image.height();
         normalImageWidth=image.width();
         ui->Image->resize(ui->scrollAreaImage->width(),ui->scrollAreaImage->height());
         ui->Image ->setPixmap(QPixmap::fromImage(image).scaled(ui->scrollAreaImage->width(),ui->scrollAreaImage->height()));
+        ui->ditheringImage->resize(ui->scrollAreaDither->width(),ui->scrollAreaDither->height());
+        ui->ditheringImage ->setPixmap(QPixmap::fromImage(image).scaled(ui->scrollAreaDither->width(),ui->scrollAreaDither->height()));
         changedImage=true;
+    } else {
+        changedImage=false;
+        ui->Image->resize(ui->scrollAreaImage->width(),ui->scrollAreaImage->height());
+        ui->Image ->setPixmap(QPixmap::fromImage(image).scaled(ui->scrollAreaImage->width(),ui->scrollAreaImage->height()));
+        ui->ditheringImage->resize(ui->scrollAreaDither->width(),ui->scrollAreaDither->height());
+        ui->ditheringImage ->setPixmap(QPixmap::fromImage(image).scaled(ui->scrollAreaDither->width(),ui->scrollAreaDither->height()));
     }
+    ui->lineEdit->setText(imageName);
+    ui->lineEdit_3->setText(imageName);
 }
 
 void MainWindow::setStrel(const QString strelname){
@@ -60,29 +52,7 @@ void MainWindow::setStrel(const QString strelname){
         QMessageBox::critical(this," strel image not found","the strel image "+strelname+" was not found");
         ui->lineEdit_2->setText(strelName);
     } else {
-/*        if(strelimage.depth()/strelimage.bytesPerLine()!=1 && strelimage.depth()/strelimage.bytesPerLine()!=4){
-                QMessageBox::critical(this,"image not with 1 or 4 channels","the image "+strelName+" is not of 4 or 1 channels");
-            } else {
 
-                //frees old array
-                free(strelImage);
-                //create uchar array of the strel image
-
-                strelName = strelname;
-                QByteArray bytes;
-                QBuffer buffer(&bytes);
-                buffer.open(QIODevice::WriteOnly);
-
-                strelimage.save(&buffer,"PNG");
-                buffer.close();
-                int channels = strelimage.depth()/strelimage.bytesPerLine();
-                strelImage = (uchar *)malloc(strelimage.height()*strelimage.width()*channels);
-                memcpy(processedImage,reinterpret_cast<uchar*>(bytes.data()),bytes.size());
-                strelImageHeight=strelimage.height();
-                strelImageWidth=strelimage.width();
-
-
-            }*/
         strelName = strelname;
         strelImageHeight=strelimage.height();
         strelImageWidth=strelimage.width();
@@ -119,7 +89,7 @@ void MainWindow::on_pushButton_clicked()
         morphing->start(se,arguments);
         if(!morphing->waitForFinished()){
             QMessageBox::critical(this," error","error processing "+imageName+" with strel"+strelName+
-                                   " the error"+ morphing->errorString() + " occured, program exited with exit status " + QString( morphing->exitCode()));
+                                   " the error "+ morphing->errorString() + " occured, program exited with exit status " + QString( morphing->exitCode()));
         }else{
             processedName = "/tmp/processedImage.png";
             QImage procImage(processedName);
@@ -153,6 +123,85 @@ void MainWindow::on_pushButton_3_clicked()
     } else{
         QString file_name = QFileDialog::getSaveFileName(this,"choose a name for the processed image",QDir::homePath(),"*.png");
         QImage procImage(processedName);
+        if(procImage.isNull()){
+            QMessageBox::critical(this," error","error while saving the image");
+        } else {
+            procImage.save(file_name);
+        }
+    }
+}
+
+void MainWindow::on_pushButton_4_clicked()
+{
+    QString operation=ui->comboBoxDither->currentText();
+    this->setImage( ui->lineEdit_3->text());
+    if(changedImage)started=false;
+    QString dimension = ui->lineEdit_4->text();
+    QString levels = ui->lineEdit_5->text();
+    bool valid=true;
+
+    if(levels==""){
+        QMessageBox::critical(this,"levels not specified","levels must be specified for dithering");
+        valid=false;
+    }
+
+    if(operation=="ordered" && dimension==""){
+        QMessageBox::critical(this," dimension not specified","for ordered dithering the dimension of the matrix must be given");
+        valid=false;
+    }
+
+    if(valid && (changedImage || operation!=oldOperation || oldDitheringLevels!=levels || (oldDitheringDimension!=dimension &&operation=="ordered") ) &&!started){
+        QObject *parentProc=nullptr;
+        QStringList arguments;
+        arguments << ui->lineEdit_3->text() << levels;
+
+        QProcess * dithering= new QProcess(parentProc);
+        QFileInfo workdir("../../src/opencl/dither/");
+        QFileInfo procdirRandom("../../src/opencl//dither/random_dithering");
+        QFileInfo procdirOrdered("../../src/opencl//dither/ordered_dithering");
+
+        QString se = procdirRandom.absoluteFilePath();
+        if(operation=="ordered"){
+            arguments << dimension ;
+            se = procdirOrdered.absoluteFilePath();
+        }
+        arguments<<"/tmp/ditherImage.png";
+        QString wd = workdir.absolutePath();
+        dithering->setWorkingDirectory(wd);
+        dithering->start(se,arguments);
+        if(!dithering->waitForFinished()){
+            QMessageBox::critical(this," error","error processing "+imageName+" with strel"+strelName+
+                                   " the error "+ dithering->errorString() + " occured, program dithering exited with exit status " + QString( dithering->exitCode()));
+        }else{
+            ditheringProcessedName = "/tmp/ditherImage.png";
+            QImage procImage(ditheringProcessedName);
+            if(procImage.isNull()){
+                QMessageBox::critical(this," processed image not found","the processed image "+ditheringProcessedName+" was not found");
+            } else {
+                ui->ditheringImageProcessed->resize(ui->scrollAreaDither2->width(),ui->scrollAreaDither2->height());
+                ui->ditheringImageProcessed ->setPixmap(QPixmap::fromImage(procImage).scaled(ui->scrollAreaDither2->width(),ui->scrollAreaDither2->height()));
+            }
+        }
+        changedImage=false;
+    }
+}
+
+void MainWindow::on_pushButtonDither1_clicked()
+{
+    imageDialog = new SecWindowImage(this);
+    if(imageDialog->setImage(ditheringProcessedName))
+    //if(imageDialog->passImage(processedImage,processedImageWidth,processedImageHeight))
+            imageDialog->show();
+}
+
+void MainWindow::on_pushButton_6_clicked()
+{
+    int test=0;
+    if(ditheringProcessedName==NULL){
+        QMessageBox::warning(this," warning","image not yet processed");
+    } else{
+        QString file_name = QFileDialog::getSaveFileName(this,"choose a name for the processed image",QDir::homePath(),"*.png");
+        QImage procImage(ditheringProcessedName);
         if(procImage.isNull()){
             QMessageBox::critical(this," error","error while saving the image");
         } else {

@@ -22,7 +22,7 @@ class MainWindow : public QMainWindow
 public:
     MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
-    QString imageName=NULL,strelName=NULL,processedName=NULL;
+    QString imageName=NULL,strelName=NULL,processedName=NULL,ditheringProcessedName=NULL;
     void setImage(const QString name);
     void setStrel(const QString strelname);
     void showImage();
@@ -35,6 +35,12 @@ private slots:
 
     void on_pushButton_3_clicked();
 
+    void on_pushButton_4_clicked();
+
+    void on_pushButtonDither1_clicked();
+
+    void on_pushButton_6_clicked();
+
 private:
     Ui::MainWindow *ui;
     SecWindowImage * imageDialog;
@@ -42,6 +48,7 @@ private:
     int processedImageWidth,processedImageHeight;
     int normalImageWidth,normalImageHeight;
     int strelImageWidth,strelImageHeight;
+    int oldDitheringLevels,oldDitheringDimension,oldOperation;
     bool changedImage,changedStrel,started;
 };
 #endif // MAINWINDOW_H
