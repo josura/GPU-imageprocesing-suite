@@ -141,7 +141,7 @@ void kernel imageMinimum(global uchar4 * restrict d_output,
 	if (c < dim.x && r < dim.y) {
 		const float4 px1 = read_imagef(d_input1, sampler, coords);
 		const float4 px2 = read_imagef(d_input2, sampler, coords);
-		float4 pxresult = max(px1,px2);
+		float4 pxresult = min(px1,px2);
 		d_output[r*dim.x+c] = convert_uchar4(pxresult*255);
 	}
 }

@@ -107,7 +107,7 @@ int main(int argc, char ** args){
 	stbi_write_png(buffer,width,height,channels,processedBottomhat,channels*width);
     printf("bottomhat image saved as %s\n",buffer);
 
-    sprintf(buffer,"hitormidd%s",args[3]);
+    sprintf(buffer,"hitormiss%s",args[3]);
 	stbi_write_png(buffer,width,height,channels,processedHM,channels*width);
     printf("hit or miss image saved as %s\n",buffer);
 

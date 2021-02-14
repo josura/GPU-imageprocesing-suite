@@ -1408,7 +1408,7 @@ unsigned char * fullHitorMiss(unsigned char* image,unsigned char* strel,int imag
 		CL_MAP_READ,
 		0, streldata_size,
 		1, &complement_evt, &map_evt, &err);
-	ocl_check(err, "enqueue map d_output");
+	ocl_check(err, "enqueue map d_output2");
 
 	err = clWaitForEvents(1, &map_evt);
 	ocl_check(err, "clfinish");
@@ -1420,7 +1420,30 @@ unsigned char * fullHitorMiss(unsigned char* image,unsigned char* strel,int imag
 		&fmt_strel, &strel_desc,
 		outimg,
 		&err);
-	ocl_check(err, "create image d_tmp");
+	ocl_check(err, "create image d_strel after complement");
+
+	// complement of input image
+
+	complement_evt = complement(complement_k, que, d_output,d_input, imageheight,imagewidth);
+
+
+	outimg = clEnqueueMapBuffer(que, d_output, CL_FALSE,
+		CL_MAP_READ,
+		0, data_size,
+		1, &complement_evt, &map_evt, &err);
+	ocl_check(err, "enqueue map d_output");
+
+	err = clWaitForEvents(1, &map_evt);
+	ocl_check(err, "clfinish");
+
+	clReleaseMemObject(d_input);
+
+    d_input = clCreateImage(ctx,
+		CL_MEM_READ_ONLY | CL_MEM_HOST_WRITE_ONLY | CL_MEM_USE_HOST_PTR,
+		&fmt, &desc,
+		outimg,
+		&err);
+	ocl_check(err, "create image d_input after complement");
 
 	
 	// second erosion with complemented strel
