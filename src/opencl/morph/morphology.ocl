@@ -36,6 +36,7 @@ void kernel dilationImage(global uchar4 * restrict d_output,
 				// transparency of strel is used as don't care items
 			}
 		}
+		pxresult.w=centerpx.w;
 		d_output[r*dim.x+c] = convert_uchar4(pxresult*255);
 	}
 }
@@ -70,7 +71,7 @@ void kernel erosionImage(global uchar4 * restrict d_output,
 			}
 		}
 		//TODO fix transparency
-		pxresult.w=1.0;
+		pxresult.w=centerpx.w;
 		d_output[r*dim.x+c] = convert_uchar4(pxresult*255);
 	}
 }
@@ -89,7 +90,7 @@ void kernel imageDifference(global uchar4 * restrict d_output,
 		const float4 px1 = read_imagef(d_input1, sampler, coords);
 		const float4 px2 = read_imagef(d_input2, sampler, coords);
 		float4 pxresult = max(minvalue,px1-px2);
-		pxresult.w=1.0;
+		pxresult.w=px1.w;
 		d_output[r*dim.x+c] = convert_uchar4(pxresult*255);
 	}
 }
@@ -105,7 +106,7 @@ void kernel complement(global uchar4 * restrict d_output,
 	if (c < dim.x && r < dim.y) {
 		const float4 px = read_imagef(d_input1, sampler, coords);
 		float4 pxresult = maxvalue - px;
-		pxresult.w=1.0;
+		pxresult.w=px.w;
 		d_output[r*dim.x+c] = convert_uchar4(pxresult*255);
 	}
 }
