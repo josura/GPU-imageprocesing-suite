@@ -1,0 +1,156 @@
+const sampler_t sampler =
+	CLK_NORMALIZED_COORDS_FALSE |
+	CLK_ADDRESS_CLAMP_TO_EDGE|
+	CLK_FILTER_LINEAR;
+
+
+
+//MWC64x, an RNG made by David B. Tomas, with custom seeding
+//Source: http://cas.ee.ic.ac.uk/people/dt10/research/rngs-gpu-mwc64x.html
+
+typedef struct{ uint4 x; uint4 c; } mwc64xvec4_state_t;
+
+inline float4 MWC64XVEC4(mwc64xvec4_state_t *s, float leftLimit, float rightLimit)
+{
+    enum{ MWC64XVEC4_A = 4294883355U };
+    uint4 x=s->x, c=s->c;
+    uint4 res=x^c;                     // Calculate the result
+    uint4 hi=mul_hi(x,MWC64XVEC4_A);              // Step the RNG
+    x=x*MWC64XVEC4_A+c;
+    c=hi+convert_uint4(x<c);
+    s->x=x;
+    s->c=c;             // Pack the state back up
+    return leftLimit + convert_float4(res)*((rightLimit - leftLimit)/4294967295);
+}
+
+//Another simple RNG (often used in hashing) to randomize local id or global id
+inline uint randomizeId(uint id)
+{
+        id = (id ^ 61) ^ (id >> 16);
+        id *= 9;
+        id = id ^ (id >> 4);
+        id *= 0x27d4eb2d;
+        id = id ^ (id >> 15);
+        return id;
+ }
+
+//Mix seeds with randomized global id
+inline void MWC64XVEC4_Seeding(mwc64xvec4_state_t *s, int gi, uint4 seeds){
+	s->x = (uint4)((seeds.x) ^ randomizeId(gi), (seeds.y*seeds.z) ^ randomizeId(gi), (seeds.y*(seeds.w & 131071)) ^ randomizeId(gi), ((seeds.x & 131071)*seeds.y) ^ randomizeId(gi));
+	s->c = (uint4)((seeds.w) ^ randomizeId(gi), (seeds.w ^ seeds.x) ^ randomizeId(gi), (seeds.z*seeds.x) ^ randomizeId(gi), (seeds.z*(seeds.w & 131071)) ^ randomizeId(gi));
+}
+
+//Compute histogram easily with atomics
+void kernel histogram(global int * restrict histogram, 
+	read_only image2d_t d_input){
+
+	const int i = get_global_id(0);
+	const int j = get_global_id(1);
+	const int2 dim = get_image_dim(d_input);
+
+	if (i < dim.x && j < dim.y) {
+		const uint level = read_imageui(d_input, sampler, (int2)(i,j)).x;
+		atomic_inc((volatile global int *)(histogram+level));
+	}
+}
+
+//Otsu: compute interclass variance and then max reduction with local memory
+kernel void otsu(global float * restrict probs, global float * restrict cumulative_means, 
+	global float2 * restrict max_wg_k, local float2 * restrict lmem, const float g_mean){
+	
+	const int gi = get_global_id(0);
+
+	const float prob1 = probs[gi];
+	const float cumulative_mean1 = cumulative_means[gi];
+
+	const float prob2 = 1.0f - prob1;
+
+	const float mean1 = cumulative_mean1/prob1;
+	const float mean2 = (g_mean - cumulative_mean1)/prob2;
+	const float mean_diff = mean1-mean2;
+	const float interclass_var = prob1*prob2*mean_diff*mean_diff;
+
+	float2 lmax;
+
+	//Ignore black and white
+	if(gi==255 || gi==0) lmax.x = 0.0f;
+	else lmax.x = interclass_var;
+
+	//Save bit representation of index
+	lmax.y = *((float*)(&gi));
+
+	const int i = get_local_id(0);
+	lmem[i] = lmax;
+	int working = get_local_size(0) >> 1;
+	float2 lval;
+	while(working > 0){
+		barrier(CLK_LOCAL_MEM_FENCE);
+		if (i < working) {
+			lval = lmem[i+working];
+			if(lmax.x < lval.x){
+				lmax = lval;
+				lmem[i] = lmax;
+			}
+		}
+		working >>= 1;
+	}
+	if (i == 0){
+		max_wg_k[get_group_id(0)] = lmax;
+	}
+
+}
+
+kernel void reducemax(global float2 * restrict max_wg_k, global int * restrict max_k, 
+	local float2 * restrict lmem){
+	
+	const int gi = get_global_id(0);
+
+	float2 lmax = max_wg_k[gi];
+	float k = lmax.y;
+	int real_k = *((int*)(&k));
+
+	const int i = get_local_id(0);
+	lmem[i] = lmax;
+	int working = get_local_size(0) >> 1;
+	float2 lval;
+	while(working > 0){
+		barrier(CLK_LOCAL_MEM_FENCE);
+		if (i < working) {
+			lval = lmem[i+working];
+			if(lmax.x < lval.x){
+				lmax = lval;
+				lmem[i] = lmax;
+			}
+		}
+		working >>= 1;
+	}
+	if (i == 0){
+		//Convert bit representation of index back to int
+		float k = lmax.y;
+		int real_k = *((int*)(&k));
+		max_k[get_group_id(0)] = real_k;
+	}
+
+}
+
+//Simple thresholding
+void kernel binarization(global uchar4 * restrict d_output,
+	read_only image2d_t d_input,
+	int threshold){
+
+	const int i = get_global_id(0);
+	const int j = get_global_id(1);
+	const int2 dim = get_image_dim(d_input);
+
+	if (i < dim.x && j < dim.y) {
+
+		const int gi = j*dim.x+i;
+
+		const uint4 px = read_imageui(d_input, sampler, (int2)(i,j));
+		const uchar4 newpx = (uchar4)((px.x > threshold)*255);
+		newpx.w = (uchar)(px.w);
+		
+		d_output[gi] = newpx;
+
+	}
+}
