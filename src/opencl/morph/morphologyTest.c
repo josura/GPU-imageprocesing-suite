@@ -69,6 +69,14 @@ int main(int argc, char ** args){
         fprintf(stderr,"problems in method for bottomhat\n");
         exit(1);
     }
+
+    //HIT OR MISS TEST
+	unsigned char * processedHM = fullHitorMiss(img,imgstrel,width,height,channels,strelwidth,strelheight,strelchannels);
+    if(processedBottomhat==NULL){
+        fprintf(stderr,"problems in method for bottomhat\n");
+        exit(1);
+    }
+
     
 	char buffer[128];
 	sprintf(buffer,"erosion%s",args[3]);
@@ -99,8 +107,14 @@ int main(int argc, char ** args){
 	stbi_write_png(buffer,width,height,channels,processedBottomhat,channels*width);
     printf("bottomhat image saved as %s\n",buffer);
 
+    sprintf(buffer,"hitormidd%s",args[3]);
+	stbi_write_png(buffer,width,height,channels,processedHM,channels*width);
+    printf("hit or miss image saved as %s\n",buffer);
+
     stbi_image_free(img);
     stbi_image_free(imgstrel);
+
+    //TODO freeing memory for every uchar array but it is useless because the program has finished
     /*stbi_image_free(processedErosion);
     stbi_image_free(processedDilation);
     stbi_image_free(processedGradient);
