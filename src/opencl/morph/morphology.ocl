@@ -130,7 +130,7 @@ void kernel imageDifference(global uchar4 * restrict d_output,
 	}
 }
 
-void kernel imageMinimum(global uchar4 * restrict d_output,
+void kernel imageMinimumPointwise(global uchar4 * restrict d_output,
 	read_only image2d_t d_input1,
 	read_only image2d_t d_input2)
 {
@@ -142,6 +142,22 @@ void kernel imageMinimum(global uchar4 * restrict d_output,
 		const float4 px1 = read_imagef(d_input1, sampler, coords);
 		const float4 px2 = read_imagef(d_input2, sampler, coords);
 		float4 pxresult = min(px1,px2);
+		d_output[r*dim.x+c] = convert_uchar4(pxresult*255);
+	}
+}
+
+void kernel imageMaximumPointwise(global uchar4 * restrict d_output,
+	read_only image2d_t d_input1,
+	read_only image2d_t d_input2)
+{
+	const int c = get_global_id(0);
+	const int r = get_global_id(1);
+	const int2 dim = get_image_dim(d_input1);
+	const float2 coords = (float2)(c, r);
+	if (c < dim.x && r < dim.y) {
+		const float4 px1 = read_imagef(d_input1, sampler, coords);
+		const float4 px2 = read_imagef(d_input2, sampler, coords);
+		float4 pxresult = max(px1,px2);
 		d_output[r*dim.x+c] = convert_uchar4(pxresult*255);
 	}
 }

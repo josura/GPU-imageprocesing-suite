@@ -1,5 +1,6 @@
 #include<stdio.h>
 #include<string.h>
+#include<ctype.h>
 
 #define STB_IMAGE_IMPLEMENTATION
 #include"../../../stb/stb_image.h" 
@@ -109,6 +110,16 @@ cl_event difference(cl_kernel difference_k, cl_command_queue que,
 	ocl_check(err, "enqueue difference");
 
 	return difference_evt;
+}
+
+short isNumber(const char* string){
+	int i=0;
+	if(string==NULL)return 0;
+	while(string[i]!=0){
+		if(!isdigit(string[i])){return 0;}
+		i++;
+	}
+	return 1;
 }
 
 
@@ -1308,7 +1319,7 @@ unsigned char * fullHitorMiss(unsigned char* image,unsigned char* strel,int imag
 	cl_kernel imageminimum_k = NULL,erosion_k=NULL,complement_k;  //TODO not dilation and not difference, but intersection-min and complement
 	erosion_k = clCreateKernel(prog, "erosionImageHM", &err);
 	ocl_check(err, "create kernel erosion image");
-	imageminimum_k = clCreateKernel(prog, "imageMinimum", &err);
+	imageminimum_k = clCreateKernel(prog, "imageMinimumPointwise", &err);
 	ocl_check(err, "create kernel minimum image");
 	complement_k = clCreateKernel(prog, "complement", &err);
 	ocl_check(err, "create kernel complement image");
@@ -1503,8 +1514,371 @@ unsigned char * fullHitorMiss(unsigned char* image,unsigned char* strel,int imag
 	return outimg;
 }
 
-unsigned char* morphOperation(const char* imagename,const char* strelname,const char* method,int*finalwidth,int*finalheight,int*finalchannels){
-	int width,height,channels,strelwidth,strelheight,strelchannels;
+
+unsigned char* fullGeodesicErosion(unsigned char* image,unsigned char* mask,unsigned char* strel,int numIteration,
+									int imagewidth,int imageheight,int imagechannels,
+									int maskwidth,int maskheight,int maskchannels,
+									int strelwidth, int strelheight,int strelchannels){
+
+	loggingChannels(imagechannels,strelchannels);	
+	loggingChannels(maskchannels,strelchannels);
+
+
+	if(image==NULL){
+		printf("error while loading the image, probably image does not exists\n");
+		exit(1);
+	}
+	if(mask==NULL){
+		printf("error while loading the mask image, probably image does not exists\n");
+		exit(1);
+	}
+	if(strel==NULL){
+		printf("error while loading the image strel, probably image does not exists\n");
+		exit(1);
+	}
+	if (imagechannels <= 3 || maskchannels<=3) {
+                fprintf(stderr, "source image must have 4 channels (<RGB,alpha> or some other format with transparency and 3 channels for color space)\n");
+                exit(1);
+        }
+	if(imagewidth!=maskwidth || imageheight!= maskheight){
+		fprintf(stderr, "source image and mask image must have same dimensions\n");
+		exit(1);
+	}
+	unsigned char * outimg = NULL;
+	int data_size=imagewidth*imageheight*imagechannels;
+	int dstwidth=imagewidth,dstheight=imageheight;
+	int dstdata_size=dstwidth*dstheight*imagechannels;
+	cl_platform_id p = select_platform();
+	cl_device_id d = select_device(p);
+	cl_context ctx = create_context(p, d);
+	cl_command_queue que = create_queue(ctx, d);
+	cl_program prog = create_program("morphology.ocl", ctx, d);
+	int err=0;
+	cl_kernel imagemaximum_k = NULL,erosion_k=NULL;  //TODO not dilation and not difference, but intersection-min and complement
+	erosion_k = clCreateKernel(prog, "erosionImage", &err);
+	ocl_check(err, "create kernel erosion image");
+	imagemaximum_k = clCreateKernel(prog, "imageMaximumPointwise", &err);
+	ocl_check(err, "create kernel maximum image");
+	/* get information about the preferred work-group size multiple */
+	err = clGetKernelWorkGroupInfo(erosion_k, d,
+		CL_KERNEL_PREFERRED_WORK_GROUP_SIZE_MULTIPLE,
+		sizeof(gws_align), &gws_align, NULL);
+	ocl_check(err, "preferred wg multiple for erosion");
+
+	cl_mem d_input = NULL, d_mask = NULL , d_output = NULL;
+
+	const cl_image_format fmt = {
+		.image_channel_order = CL_RGBA,
+		.image_channel_data_type = CL_UNORM_INT8,
+	};
+	const cl_image_desc desc = {
+		.image_type = CL_MEM_OBJECT_IMAGE2D,
+		.image_width = imagewidth,
+		.image_height = imageheight,
+		//.image_row_pitch = src.data_size/src.height,
+	};
+	d_input = clCreateImage(ctx,
+		CL_MEM_READ_ONLY | CL_MEM_HOST_WRITE_ONLY | CL_MEM_USE_HOST_PTR,
+		&fmt, &desc,
+		image,
+		&err);
+	ocl_check(err, "create image d_input");
+
+	d_mask = clCreateImage(ctx,
+		CL_MEM_READ_ONLY | CL_MEM_HOST_WRITE_ONLY | CL_MEM_USE_HOST_PTR,
+		&fmt, &desc,
+		mask,
+		&err);
+	ocl_check(err, "create image d_mask");
+
+
+	//SEZIONE STRUCTURING ELEMENT
+	cl_mem d_strel=NULL;
+	
+
+
+	const cl_image_format fmt_strel = {
+		.image_channel_order = CL_RGBA,
+		.image_channel_data_type = CL_UNORM_INT8,
+	};
+	const cl_image_desc strel_desc = {
+		.image_type = CL_MEM_OBJECT_IMAGE2D,
+		.image_width = strelwidth,
+		.image_height = strelheight,
+		//.image_row_pitch = src.data_size/src.height,
+	};
+	d_strel = clCreateImage(ctx,
+		CL_MEM_READ_ONLY | CL_MEM_HOST_WRITE_ONLY | CL_MEM_USE_HOST_PTR,
+		&fmt_strel, &strel_desc,
+		strel,
+		&err);
+	ocl_check(err, "create image d_input");
+
+
+	int streldata_size=strelheight*strelwidth*strelchannels;
+
+	//FINE SEZIONE STRUCTURING ELEMENT
+
+
+	d_output = clCreateBuffer(ctx,
+	CL_MEM_WRITE_ONLY | CL_MEM_HOST_READ_ONLY | CL_MEM_ALLOC_HOST_PTR,
+	dstdata_size, NULL,
+		&err);
+	ocl_check(err, "create buffer d_output");
+
+	cl_event erosion_evt,maximum_evt, map_evt;
+
+	// CYCLE FOR THE RECURSION OF GEODESIC EROSION
+	for(int i = 0 ; i<numIteration; ++i){
+		// erosion with structuring element and current image
+		erosion_evt = erosion(erosion_k, que, d_output, d_input,d_strel, imageheight, imagewidth, strelheight,strelwidth);
+
+		outimg = clEnqueueMapBuffer(que, d_output, CL_FALSE,
+			CL_MAP_READ,
+			0, dstdata_size,
+			1, &erosion_evt, &map_evt, &err);
+		ocl_check(err, "enqueue map d_output");
+
+		err = clWaitForEvents(1, &map_evt);
+		ocl_check(err, "clfinish");
+
+		cl_mem d_tmp=NULL;
+
+		d_tmp = clCreateImage(ctx,
+			CL_MEM_READ_ONLY | CL_MEM_HOST_WRITE_ONLY | CL_MEM_USE_HOST_PTR,
+			&fmt, &desc,
+			outimg,
+			&err);
+		ocl_check(err, "create image d_tmp");
+
+
+
+		// image maximum pointwise with mask
+
+
+
+		maximum_evt = difference(imagemaximum_k,que, d_output, d_tmp,d_input, imageheight, imagewidth, imageheight,imagewidth);
+
+		outimg = clEnqueueMapBuffer(que, d_output, CL_FALSE,
+			CL_MAP_READ,
+			0, dstdata_size,
+			1, &maximum_evt, &map_evt, &err);
+		ocl_check(err, "enqueue map d_output");
+
+		err = clWaitForEvents(1, &map_evt);
+		ocl_check(err, "clfinish");
+
+		clReleaseMemObject(d_input);
+ 
+		d_input = clCreateImage(ctx,
+			CL_MEM_READ_ONLY | CL_MEM_HOST_WRITE_ONLY | CL_MEM_USE_HOST_PTR,
+			&fmt, &desc,
+			outimg,
+			&err);
+		ocl_check(err, "create image d_input after image maximum pointwise");
+		clReleaseMemObject(d_tmp);
+
+	}
+
+
+	clReleaseMemObject(d_output);
+	clReleaseMemObject(d_input);
+	clReleaseMemObject(d_strel);
+	clReleaseKernel(imagemaximum_k);
+	clReleaseKernel(erosion_k);
+	clReleaseProgram(prog);
+	clReleaseCommandQueue(que);
+	clReleaseContext(ctx);
+
+	//stbi_image_free(image);
+	//stbi_image_free(strel);
+	return outimg;
+}
+
+
+unsigned char* fullGeodesicDilation(unsigned char* image,unsigned char* mask,unsigned char* strel,int numIteration,
+									int imagewidth,int imageheight,int imagechannels,
+									int maskwidth,int maskheight,int maskchannels,
+									int strelwidth, int strelheight,int strelchannels){
+
+	loggingChannels(imagechannels,strelchannels);	
+	loggingChannels(maskchannels,strelchannels);
+
+
+	if(image==NULL){
+		printf("error while loading the image, probably image does not exists\n");
+		exit(1);
+	}
+	if(mask==NULL){
+		printf("error while loading the mask image, probably image does not exists\n");
+		exit(1);
+	}
+	if(strel==NULL){
+		printf("error while loading the image strel, probably image does not exists\n");
+		exit(1);
+	}
+	if (imagechannels <= 3 || maskchannels<=3) {
+                fprintf(stderr, "source image must have 4 channels (<RGB,alpha> or some other format with transparency and 3 channels for color space)\n");
+                exit(1);
+        }
+	if(imagewidth!=maskwidth || imageheight!= maskheight){
+		fprintf(stderr, "source image and mask image must have same dimensions\n");
+		exit(1);
+	}
+	unsigned char * outimg = NULL;
+	int data_size=imagewidth*imageheight*imagechannels;
+	int dstwidth=imagewidth,dstheight=imageheight;
+	int dstdata_size=dstwidth*dstheight*imagechannels;
+	cl_platform_id p = select_platform();
+	cl_device_id d = select_device(p);
+	cl_context ctx = create_context(p, d);
+	cl_command_queue que = create_queue(ctx, d);
+	cl_program prog = create_program("morphology.ocl", ctx, d);
+	int err=0;
+	cl_kernel imageminimum_k = NULL,dilation_k=NULL;  //TODO not dilation and not difference, but intersection-min and complement
+	dilation_k = clCreateKernel(prog, "dilationImage", &err);
+	ocl_check(err, "create kernel dilation image");
+	imageminimum_k = clCreateKernel(prog, "imageMinimumPointwise", &err);
+	ocl_check(err, "create kernel minimum image");
+	/* get information about the preferred work-group size multiple */
+	err = clGetKernelWorkGroupInfo(dilation_k, d,
+		CL_KERNEL_PREFERRED_WORK_GROUP_SIZE_MULTIPLE,
+		sizeof(gws_align), &gws_align, NULL);
+	ocl_check(err, "preferred wg multiple for erosion");
+
+	cl_mem d_input = NULL, d_mask = NULL , d_output = NULL;
+
+	const cl_image_format fmt = {
+		.image_channel_order = CL_RGBA,
+		.image_channel_data_type = CL_UNORM_INT8,
+	};
+	const cl_image_desc desc = {
+		.image_type = CL_MEM_OBJECT_IMAGE2D,
+		.image_width = imagewidth,
+		.image_height = imageheight,
+		//.image_row_pitch = src.data_size/src.height,
+	};
+	d_input = clCreateImage(ctx,
+		CL_MEM_READ_ONLY | CL_MEM_HOST_WRITE_ONLY | CL_MEM_USE_HOST_PTR,
+		&fmt, &desc,
+		image,
+		&err);
+	ocl_check(err, "create image d_input");
+
+	d_mask = clCreateImage(ctx,
+		CL_MEM_READ_ONLY | CL_MEM_HOST_WRITE_ONLY | CL_MEM_USE_HOST_PTR,
+		&fmt, &desc,
+		mask,
+		&err);
+	ocl_check(err, "create image d_mask");
+
+
+	//SEZIONE STRUCTURING ELEMENT
+	cl_mem d_strel=NULL;
+	
+
+
+	const cl_image_format fmt_strel = {
+		.image_channel_order = CL_RGBA,
+		.image_channel_data_type = CL_UNORM_INT8,
+	};
+	const cl_image_desc strel_desc = {
+		.image_type = CL_MEM_OBJECT_IMAGE2D,
+		.image_width = strelwidth,
+		.image_height = strelheight,
+		//.image_row_pitch = src.data_size/src.height,
+	};
+	d_strel = clCreateImage(ctx,
+		CL_MEM_READ_ONLY | CL_MEM_HOST_WRITE_ONLY | CL_MEM_USE_HOST_PTR,
+		&fmt_strel, &strel_desc,
+		strel,
+		&err);
+	ocl_check(err, "create image d_input");
+
+
+	int streldata_size=strelheight*strelwidth*strelchannels;
+
+	//FINE SEZIONE STRUCTURING ELEMENT
+
+
+	d_output = clCreateBuffer(ctx,
+	CL_MEM_WRITE_ONLY | CL_MEM_HOST_READ_ONLY | CL_MEM_ALLOC_HOST_PTR,
+	dstdata_size, NULL,
+		&err);
+	ocl_check(err, "create buffer d_output");
+
+	cl_event dilation_evt,minimum_evt, map_evt;
+
+	// CYCLE FOR THE RECURSION OF GEODESIC EROSION
+	for(int i = 0 ; i<numIteration; ++i){
+		// erosion with structuring element and current image
+		dilation_evt = dilation(dilation_k, que, d_output, d_input,d_strel, imageheight, imagewidth, strelheight,strelwidth);
+
+		outimg = clEnqueueMapBuffer(que, d_output, CL_FALSE,
+			CL_MAP_READ,
+			0, dstdata_size,
+			1, &dilation_evt, &map_evt, &err);
+		ocl_check(err, "enqueue map d_output");
+
+		err = clWaitForEvents(1, &map_evt);
+		ocl_check(err, "clfinish");
+
+		cl_mem d_tmp=NULL;
+
+		d_tmp = clCreateImage(ctx,
+			CL_MEM_READ_ONLY | CL_MEM_HOST_WRITE_ONLY | CL_MEM_USE_HOST_PTR,
+			&fmt, &desc,
+			outimg,
+			&err);
+		ocl_check(err, "create image d_tmp");
+
+
+
+		// image maximum pointwise with mask
+
+
+
+		minimum_evt = difference(imageminimum_k,que, d_output, d_tmp,d_input, imageheight, imagewidth, imageheight,imagewidth);
+
+		outimg = clEnqueueMapBuffer(que, d_output, CL_FALSE,
+			CL_MAP_READ,
+			0, dstdata_size,
+			1, &minimum_evt, &map_evt, &err);
+		ocl_check(err, "enqueue map d_output");
+
+		err = clWaitForEvents(1, &map_evt);
+		ocl_check(err, "clfinish");
+
+		clReleaseMemObject(d_input);
+ 
+		d_input = clCreateImage(ctx,
+			CL_MEM_READ_ONLY | CL_MEM_HOST_WRITE_ONLY | CL_MEM_USE_HOST_PTR,
+			&fmt, &desc,
+			outimg,
+			&err);
+		ocl_check(err, "create image d_input after image maximum pointwise");
+		clReleaseMemObject(d_tmp);
+
+	}
+
+
+	clReleaseMemObject(d_output);
+	clReleaseMemObject(d_input);
+	clReleaseMemObject(d_strel);
+	clReleaseKernel(imageminimum_k);
+	clReleaseKernel(dilation_k);
+	clReleaseProgram(prog);
+	clReleaseCommandQueue(que);
+	clReleaseContext(ctx);
+
+	//stbi_image_free(image);
+	//stbi_image_free(strel);
+	return outimg;
+}
+
+
+unsigned char* morphOperation(const char* imagename,const char* strelname,const char* method,int*finalwidth,int*finalheight,int*finalchannels,const char* maskname,int numIteration){
+	int width,height,channels,strelwidth,strelheight,strelchannels,maskwidth,maskheight,maskchannels;
 	// caricamento immagine in memoria come array di unsigned char
 	unsigned char * img= stbi_load(imagename,&width,&height,&channels,STBI_rgb_alpha);
 
@@ -1566,6 +1940,32 @@ unsigned char* morphOperation(const char* imagename,const char* strelname,const 
         processed = fullHitorMiss(img,imgstrel,width,height,channels,strelwidth,strelheight,strelchannels);
 		if(processed==NULL){
 			fprintf(stderr,"problems in method for hitormiss\n");
+			exit(1);
+		}
+    }
+
+	if(strstr(method,"geodesicerosion") && maskname!=NULL){
+		unsigned char * mask= stbi_load(maskname,&maskwidth,&maskheight,&maskchannels,STBI_rgb_alpha);
+		if(mask==NULL){
+			fprintf(stderr,"problems loading mask image for geodesic erosion\n");
+			exit(1);
+		}
+        processed = fullGeodesicErosion(img,mask,imgstrel,numIteration,width,height,channels,maskwidth,maskheight,maskchannels,strelwidth,strelheight,strelchannels);
+		if(processed==NULL){
+			fprintf(stderr,"problems in method for geodesic erosion\n");
+			exit(1);
+		}
+    }
+
+	if(strstr(method,"geodesicdilation") && maskname!=NULL){
+		unsigned char * mask= stbi_load(maskname,&maskwidth,&maskheight,&maskchannels,STBI_rgb_alpha);
+		if(mask==NULL){
+			fprintf(stderr,"problems loading mask image for geodesic dilation\n");
+			exit(1);
+		}
+        processed = fullGeodesicDilation(img,mask,imgstrel,numIteration,width,height,channels,maskwidth,maskheight,maskchannels,strelwidth,strelheight,strelchannels);
+		if(processed==NULL){
+			fprintf(stderr,"problems in method for geodesic dilation\n");
 			exit(1);
 		}
     }
