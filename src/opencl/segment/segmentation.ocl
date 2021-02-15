@@ -154,3 +154,183 @@ void kernel binarization(global uchar4 * restrict d_output,
 
 	}
 }
+
+//Convert image from RGB to L*a*b* to be able to compute distances between colors
+void kernel RGBtoLAB(read_only image2d_t input,
+	write_only image2d_t output){
+
+	const int2 coords = (int2)(get_global_id(0),get_global_id(1));
+	const int2 dim = get_image_dim(input);
+
+	if (coords.x < dim.x && coords.y < dim.y) {
+
+		const uint4 px = read_imageui(input, sampler, coords);
+		const uint alpha = px.w;
+
+		const float4 n0_px = convert_float4(px)/255;
+		float4 n1_px = pow((n0_px+0.055f)/1.055f, 2.4f);
+		float4 n2_px = (n0_px)/12.92f;
+		int4 condition = (int4)(isgreater(n0_px, (float4)(0.04045f)) << 31);
+		float4 n_px = select(n2_px, n1_px, condition);
+
+		n_px.x = (n_px.x*0.4124f + n_px.y*0.3576f + n_px.z*0.1805f)/0.95047f;
+		n_px.y = (n_px.x*0.2126f + n_px.y*0.7152f + n_px.z*0.0722f);
+		n_px.z = (n_px.x*0.0193f + n_px.y*0.1192f + n_px.z*0.9505f)/1.08883f;
+
+		n1_px = cbrt(n_px);
+		n2_px = ((7.787f)*n0_px) + 0.1379f;
+		condition = (int4)(isgreater(n_px, (float4)(0.008856f)) << 31);
+		n_px = select(n2_px, n1_px, condition);
+		
+		n_px.x = 116*n_px.y - 16;
+		n_px.y = 500*(n_px.x - n_px.y);
+		n_px.z = 200*(n_px.y-n_px.z);
+
+		const uint4 newpx = convert_uint4(n_px);
+		newpx.w = alpha;
+		
+		write_imageui(output, coords, newpx);
+
+	}
+}
+
+void kernel LABtoRGB(read_only image2d_t input,
+	write_only image2d_t output){
+
+	const int2 coords = (int2)(get_global_id(0),get_global_id(1));
+	const int2 dim = get_image_dim(input);
+
+	if (coords.x < dim.x && coords.y < dim.y) {
+
+		const uint4 px = read_imageui(input, sampler, coords);
+		const uint alpha = px.w;
+
+		const float4 f_px = convert_float4(px);
+		float4 n_px;
+		n_px.y = (f_px.x+16)/116;
+		n_px.x = f_px.y/500 + n_px.y;
+		n_px.z = n_px.y - f_px.z/200;
+
+		float4 n1_px = n_px*n_px*n_px;
+		float4 n2_px = (n_px - 0.1379f)/7.787f;
+		int4 condition = (int4)(isgreater(n1_px, (float4)(0.008856f)) << 31);
+		n_px = select(n2_px, n1_px, condition);
+		n_px = n_px*(float4)(0.95047f, 1.0f, 1.08883f, 0.0f);
+
+		n1_px = 1.055f*pow(n_px, 1/2.4f)-0.055f;
+		n2_px = 12.92f*n_px;
+		condition = (int4)(isgreater(n_px, (float4)(0.0031308f)) << 31);
+		n_px = select(n2_px, n1_px, condition);
+		
+		n_px = max((float4)(0), min((float4)(1), n_px)) * 255;
+
+		const uint4 newpx = convert_uint4(n_px);
+		newpx.w = alpha;
+		
+		write_imageui(output, coords, newpx);
+
+	}
+}
+
+inline int global_index(int2 coords, int height){
+	return coords.y*height+coords.x;
+}
+
+inline int inside(int2 coords, int2 dim){
+	int x = (coords.x >= 0 && coords.x < dim.x);
+	int y = (coords.y >= 0 && coords.y < dim.y);
+	return x && y;
+}
+
+//Distance between two colors in L*a*b* color space
+inline float deltaE(uint3 labA_u, uint3 labB_u){
+	const float3 labA = convert_float3(labA_u);
+	const float3 labB = convert_float3(labB_u);
+	const float3 delta = labA-labB;
+	const float c1 = sqrt(labA.y*labA.y + labA.z*labA.z);
+	const float c2 = sqrt(labB.y*labB.y + labB.z*labB.z);
+	const float deltaC = c1-c2;
+	float deltaH = delta.y * delta.y + delta.z * delta.z - deltaC * deltaC;
+	if (deltaH < 0) deltaH = 0;
+	else deltaH = sqrt(deltaH);
+	const float sc = 1.0f + 0.045f*c1;
+	const float sh = 1.0f + 0.015f*c1;
+	const float deltaLKlsl = delta.x;
+	const float deltaCkcsc = deltaC/sc;
+	const float deltaHkhsh = deltaH/sh;
+	float norm = deltaLKlsl*deltaLKlsl + deltaCkcsc*deltaCkcsc+ deltaHkhsh*deltaHkhsh;
+	if(norm<0) return 0;
+	else return sqrt(norm);
+}
+
+void kernel region_growing(global int * restrict region_labels,
+	global uchar * restrict explore_labels, const int curr_region,
+	const uint dist_threshold, global int * unfinished_flag, read_only image2d_t input){
+
+	const int2 px_coords = (int2)(get_global_id(0),get_global_id(1));
+	const int2 dim = get_image_dim(input);
+
+	if (px_coords.x < dim.x && px_coords.y < dim.y) {
+
+		const int gi = global_index(px_coords, dim.x);
+		const int px_region = region_labels[gi];
+		const uchar px_explore = explore_labels[gi];
+
+		if(px_explore>0 && px_region==curr_region){
+			*unfinished_flag = 1;
+			const uint4 px = read_imageui(input, sampler, px_coords);
+			int2 d[4];
+			d[0] = (int2)(-1,0);
+			d[1] = (int2)(1,0);
+			d[2] = (int2)(0,1);
+			d[3] = (int2)(0,-1);
+
+			int2 neigh_coords;
+			uint4 neigh_px;
+			int neigh_region;
+			uchar neigh_explore;
+
+			#pragma unroll
+			for(int n=0; n<4; ++n){
+				neigh_coords = px_coords + d[n];
+				
+				if(!inside(neigh_coords, dim)){
+					continue;
+				}
+
+				neigh_px = read_imageui(input, sampler, neigh_coords);
+
+				const int ni = global_index(neigh_coords, dim.x);
+				neigh_region = region_labels[ni];
+				//neigh_explore = explore_labels[ni];
+				
+				//Check if neighbor is close enough and is not in another region
+				if(neigh_region==0 && deltaE(px.s012, neigh_px.s012)<dist_threshold){
+					region_labels[ni] = curr_region;
+					explore_labels[ni] = 1;
+				}
+			}
+			//Current pixel has explored all its neighbors
+			explore_labels[gi] = 0;
+		}
+	}
+}
+
+//Use each seed color to color all pixels in the corresponding region
+void kernel color_regions(constant uchar4 * restrict region_colors, 
+	global int * restrict region_labels,
+	read_only image2d_t input, global uchar4 * restrict output){
+
+	const int2 px_coords = (int2)(get_global_id(0),get_global_id(1));
+	const int2 dim = get_image_dim(input);
+
+	if (px_coords.x < dim.x && px_coords.y < dim.y) {
+		const uint4 px = read_imageui(input, sampler, px_coords);
+		const int gi = global_index(px_coords, dim.x);
+		const int label = region_labels[gi];
+		if(label != 0){
+			output[gi] = region_colors[label-1];
+		}
+		else output[gi] = convert_uchar4(px);
+	}
+}
