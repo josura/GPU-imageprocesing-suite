@@ -620,7 +620,10 @@ unsigned char * fullGradient(unsigned char* image,unsigned char* strel,int image
 	clReleaseMemObject(d_output);
 	clReleaseMemObject(d_input);
 	clReleaseMemObject(d_strel);
+	clReleaseMemObject(d_tmp);
 	clReleaseKernel(dilation_k);
+	clReleaseKernel(erosion_k);
+	clReleaseKernel(difference_k);
 	clReleaseProgram(prog);
 	clReleaseCommandQueue(que);
 	clReleaseContext(ctx);
@@ -766,6 +769,7 @@ unsigned char * fullClosing(unsigned char* image,unsigned char* strel,int imagew
 	clReleaseMemObject(d_input);
 	clReleaseMemObject(d_strel);
 	clReleaseKernel(dilation_k);
+	clReleaseKernel(erosion_k);
 	clReleaseProgram(prog);
 	clReleaseCommandQueue(que);
 	clReleaseContext(ctx);
@@ -914,6 +918,7 @@ unsigned char * fullOpening(unsigned char* image,unsigned char* strel,int imagew
 	clReleaseMemObject(d_input);
 	clReleaseMemObject(d_strel);
 	clReleaseKernel(dilation_k);
+	clReleaseKernel(erosion_k);
 	clReleaseProgram(prog);
 	clReleaseCommandQueue(que);
 	clReleaseContext(ctx);
