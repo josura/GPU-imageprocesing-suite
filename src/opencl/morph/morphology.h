@@ -1545,6 +1545,12 @@ unsigned char* fullGeodesicErosion(unsigned char* image,unsigned char* mask,unsi
 		exit(1);
 	}
 	unsigned char * outimg = NULL;
+	if(numIteration<=0){
+		outimg= malloc(imageheight*imagewidth*imagechannels);
+		memcpy(outimg,image,imageheight*imagewidth*imagechannels);
+		return outimg;
+
+	}
 	int data_size=imagewidth*imageheight*imagechannels;
 	int dstwidth=imagewidth,dstheight=imageheight;
 	int dstdata_size=dstwidth*dstheight*imagechannels;
@@ -1725,7 +1731,14 @@ unsigned char* fullGeodesicDilation(unsigned char* image,unsigned char* mask,uns
 		fprintf(stderr, "source image and mask image must have same dimensions\n");
 		exit(1);
 	}
+	
 	unsigned char * outimg = NULL;
+	if(numIteration<=0){
+		outimg= malloc(imageheight*imagewidth*imagechannels);
+		memcpy(outimg,image,imageheight*imagewidth*imagechannels);
+		return outimg;
+
+	}
 	int data_size=imagewidth*imageheight*imagechannels;
 	int dstwidth=imagewidth,dstheight=imageheight;
 	int dstdata_size=dstwidth*dstheight*imagechannels;

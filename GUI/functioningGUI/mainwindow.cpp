@@ -7,12 +7,14 @@ MainWindow::MainWindow(QWidget *parent)
 {
     ui->setupUi(this);
     ui->statusbar->showMessage("images without 4 channels not supported");
-    QStringList operations,operationsDither;
-    operations<<"erosion"<<"dilation"<<"gradient"<<"opening"<<"closing"<<"tophat"<<"bottomhat";
+    QStringList operations,operationsDither,operationsSegmentation;
+    operations<<"erosion"<<"dilation"<<"gradient"<<"opening"<<"closing"<<"tophat"<<"bottomhat"<<"hitormiss"<<"geodesicerosion"<<"geodesicdilation";
     operationsDither<<"random"<<"ordered";
+    operationsSegmentation<<"otsu"<<"regionGrowing";
     ui->comboBox->addItems(operations);
     ui->comboBoxDither->addItems(operationsDither);//->additems(operations);
-    changedImage = changedStrel=false;
+    ui->comboBox_2->addItems(operationsSegmentation);
+    changedImage = changedStrel=changedMask=false;
     started=true;
 }
 
@@ -34,6 +36,8 @@ void MainWindow::setImage(const QString name){
         ui->Image ->setPixmap(QPixmap::fromImage(image).scaled(ui->scrollAreaImage->width(),ui->scrollAreaImage->height()));
         ui->ditheringImage->resize(ui->scrollAreaDither->width(),ui->scrollAreaDither->height());
         ui->ditheringImage ->setPixmap(QPixmap::fromImage(image).scaled(ui->scrollAreaDither->width(),ui->scrollAreaDither->height()));
+        ui->segmentImage->resize(ui->scrollArea->width(),ui->scrollArea->height());
+        ui->segmentImage ->setPixmap(QPixmap::fromImage(image).scaled(ui->scrollArea->width(),ui->scrollArea->height()));
         changedImage=true;
     } else {
         changedImage=false;
@@ -41,9 +45,12 @@ void MainWindow::setImage(const QString name){
         ui->Image ->setPixmap(QPixmap::fromImage(image).scaled(ui->scrollAreaImage->width(),ui->scrollAreaImage->height()));
         ui->ditheringImage->resize(ui->scrollAreaDither->width(),ui->scrollAreaDither->height());
         ui->ditheringImage ->setPixmap(QPixmap::fromImage(image).scaled(ui->scrollAreaDither->width(),ui->scrollAreaDither->height()));
+        ui->segmentImage->resize(ui->scrollArea->width(),ui->scrollArea->height());
+        ui->segmentImage ->setPixmap(QPixmap::fromImage(image).scaled(ui->scrollArea->width(),ui->scrollArea->height()));
     }
     ui->lineEdit->setText(imageName);
     ui->lineEdit_3->setText(imageName);
+    ui->lineEdit_8->setText(imageName);
 }
 
 void MainWindow::setStrel(const QString strelname){
@@ -60,7 +67,17 @@ void MainWindow::setStrel(const QString strelname){
     }
 }
 
-//TODO processed image
+void MainWindow::setMask(const QString maskname){
+    QImage image(maskname);
+    if(image.isNull()){
+        QMessageBox::critical(this,"mask image not found","the mask image "+maskname+" was not found");
+        changedMask=false;
+    } else {
+        maskName = maskname;
+        changedMask=true;
+    }
+    ui->lineEdit_6->setText(maskName);
+}
 
 void MainWindow::on_pushButton_clicked()
 {
@@ -79,6 +96,24 @@ void MainWindow::on_pushButton_clicked()
         QObject *parentProc=nullptr;
         QStringList arguments;
         arguments << ui->lineEdit->text() << ui->lineEdit_2->text() << "/tmp/processedImage.png" << operation;
+        if(operation.contains("geodesic")){
+            if(ui->lineEdit_6->text()==""){
+                QMessageBox::warning(this," mask image not specified","the mask image "+ui->lineEdit_6->text()+" must be specified");
+                return;
+            }
+
+            if(ui->lineEdit_7->text()==""){
+                ui->lineEdit_7->setText("0");
+            }
+            setMask(ui->lineEdit_6->text());
+            if(changedMask){
+                arguments<<maskName<<ui->lineEdit_7->text();
+                changedMask=false;
+            } else{
+                return;
+            }
+
+        }
 
         QProcess * morphing= new QProcess(parentProc);
         QFileInfo workdir("../../src/opencl/morph/");
@@ -157,8 +192,8 @@ void MainWindow::on_pushButton_4_clicked()
 
         QProcess * dithering= new QProcess(parentProc);
         QFileInfo workdir("../../src/opencl/dither/");
-        QFileInfo procdirRandom("../../src/opencl//dither/random_dithering");
-        QFileInfo procdirOrdered("../../src/opencl//dither/ordered_dithering");
+        QFileInfo procdirRandom("../../src/opencl/dither/random_dithering");
+        QFileInfo procdirOrdered("../../src/opencl/dither/ordered_dithering");
 
         QString se = procdirRandom.absoluteFilePath();
         if(operation=="ordered"){
@@ -208,4 +243,68 @@ void MainWindow::on_pushButton_6_clicked()
             procImage.save(file_name);
         }
     }
+}
+
+void MainWindow::on_pushButton_5_clicked()
+{
+    QString operation=ui->comboBox_2->currentText();
+    this->setImage( ui->lineEdit_8->text());
+    if(changedImage)started=false;
+    QString regions = ui->lineEdit_9->text();
+    QString threshold = ui->lineEdit_10->text();
+    bool valid=true;
+
+
+    if(operation=="regionGrowing" && regions==""){
+        QMessageBox::warning(this," regions not specified","for region growing the regions of the matrix must be given, setting to default(2)");
+        regions="2";
+        ui->lineEdit_9->setText(regions);
+    }
+
+    if(valid && (changedImage || operation!=oldOperation || ((oldregions!=regions || oldthreshold!=threshold) &&operation=="regionGrowing") ) &&!started){
+        QObject *parentProc=nullptr;
+        QStringList arguments;
+        arguments << ui->lineEdit_8->text();
+
+        QProcess * dithering= new QProcess(parentProc);
+        QFileInfo workdir("../../src/opencl/segment/");
+        QFileInfo procdirOtsu("../../src/opencl/segment/otsu");
+        QFileInfo procdirRegion("../../src/opencl/segment/region_growing");
+
+        QString se = procdirOtsu.absoluteFilePath();
+        if(operation=="regionGrowing"){
+            arguments << regions <<"/tmp/segmentImage.png";
+            if(threshold!="")arguments<<threshold;
+            se = procdirRegion.absoluteFilePath();
+        } else{
+            arguments << "/tmp/segmentImage.png";
+        }
+        QString wd = workdir.absolutePath();
+        dithering->setWorkingDirectory(wd);
+        dithering->start(se,arguments);
+        if(!dithering->waitForFinished()){
+            QMessageBox::critical(this," error","error processing "+imageName+" with strel"+strelName+
+                                   " the error "+ dithering->errorString() + " occured, program segmentation exited with exit status " + QString( dithering->exitCode()));
+        }else{
+            segmentProcessedName = "/tmp/segmentImage.png";
+            QImage procImage(segmentProcessedName);
+            if(procImage.isNull()){
+                QMessageBox::critical(this," processed image not found","the processed image "+segmentProcessedName+" was not found");
+            } else {
+                ui->segmentProcessedImage->resize(ui->scrollArea_2->width(),ui->scrollArea_2->height());
+                ui->segmentProcessedImage ->setPixmap(QPixmap::fromImage(procImage).scaled(ui->scrollArea_2->width(),ui->scrollArea_2->height()));
+            }
+        }
+        changedImage=false;
+    }
+}
+
+void MainWindow::on_pushButton_7_clicked()
+{
+    //TODO OPEN IN NEW WINDOW button for segmentation
+}
+
+void MainWindow::on_pushButton_8_clicked()
+{
+    //TODO SAVE AS button for segmentation
 }

@@ -22,9 +22,10 @@ class MainWindow : public QMainWindow
 public:
     MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
-    QString imageName=NULL,strelName=NULL,processedName=NULL,ditheringProcessedName=NULL;
+    QString imageName=NULL,strelName=NULL,processedName=NULL,ditheringProcessedName=NULL,maskName=NULL,segmentProcessedName=NULL;
     void setImage(const QString name);
     void setStrel(const QString strelname);
+    void setMask(const QString maskname);
     void showImage();
     void showProcessed();
 
@@ -41,6 +42,12 @@ private slots:
 
     void on_pushButton_6_clicked();
 
+    void on_pushButton_5_clicked();
+
+    void on_pushButton_7_clicked();
+
+    void on_pushButton_8_clicked();
+
 private:
     Ui::MainWindow *ui;
     SecWindowImage * imageDialog;
@@ -49,6 +56,7 @@ private:
     int normalImageWidth,normalImageHeight;
     int strelImageWidth,strelImageHeight;
     int oldDitheringLevels,oldDitheringDimension,oldOperation;
-    bool changedImage,changedStrel,started;
+    int oldthreshold,oldregions;
+    bool changedImage,changedStrel,started,changedMask;
 };
 #endif // MAINWINDOW_H
