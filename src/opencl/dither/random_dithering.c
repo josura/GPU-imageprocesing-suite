@@ -27,6 +27,16 @@ static inline uint64_t rdtsc(void)
         return val;
 }
 
+short isNumber(const char* string){
+	int i=0;
+	if(string==NULL)return 0;
+	while(string[i]!=0){
+		if(!isdigit(string[i])){return 0;}
+		i++;
+	}
+	return 1;
+}
+
 cl_event dithering(cl_kernel dithering_k, cl_command_queue que,
 	cl_mem d_output, cl_mem d_input, cl_uint4 seeds,
 	cl_int nrows, cl_int ncols, cl_uchar num_levels)
@@ -91,6 +101,10 @@ unsigned char* grayscale2RGBA(unsigned char* inputGray,int width, int height){
 
 int main(int argc, char ** args){
 	usage(argc);
+	if(!isNumber(args[2])){
+		fprintf(stderr, "Parameter not numeric, exiting\n");
+		exit(1);
+	}
 	int width,height,channels;
 	// caricamento immagine in memoria come array di unsigned char
 	unsigned char * img = stbi_load(args[1],&width,&height,&channels,STBI_rgb_alpha);

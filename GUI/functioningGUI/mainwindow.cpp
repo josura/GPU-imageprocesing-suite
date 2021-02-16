@@ -203,6 +203,12 @@ void MainWindow::on_pushButton_4_clicked()
     if(valid && (changedImage || operation!=oldOperation || oldDitheringLevels!=levels || (oldDitheringDimension!=dimension &&operation=="ordered") ) &&!started){
         QObject *parentProc=nullptr;
         QStringList arguments;
+
+        if(!isNumber(levels)){
+            QMessageBox::critical(this," wrong format"," the number of levels "+levels+" is not a number");
+            return;
+        }
+
         arguments << ui->lineEdit_3->text() << levels;
 
         QProcess * dithering= new QProcess(parentProc);
@@ -212,6 +218,10 @@ void MainWindow::on_pushButton_4_clicked()
 
         QString se = procdirRandom.absoluteFilePath();
         if(operation=="ordered"){
+            if(!isNumber(dimension)){
+                QMessageBox::critical(this," wrong format"," the matrix dimension "+dimension+" is not a number");
+                return;
+            }
             arguments << dimension ;
             se = procdirOrdered.absoluteFilePath();
         }
@@ -276,6 +286,11 @@ void MainWindow::on_pushButton_5_clicked()
         ui->lineEdit_9->setText(regions);
     }
 
+    if(operation=="regionGrowing" && !isNumber(regions)){
+        QMessageBox::critical(this," wrong format"," the number of regions "+regions+" is not a number");
+        return;
+    }
+
     if(valid && (changedImage || operation!=oldOperation || ((oldregions!=regions || oldthreshold!=threshold) &&operation=="regionGrowing") ) &&!started){
         QObject *parentProc=nullptr;
         QStringList arguments;
@@ -289,7 +304,13 @@ void MainWindow::on_pushButton_5_clicked()
         QString se = procdirOtsu.absoluteFilePath();
         if(operation=="regionGrowing"){
             arguments << regions <<"/tmp/segmentImage.png";
-            if(threshold!="")arguments<<threshold;
+            if(threshold!=""){
+                if(!isNumber(threshold)){
+                    QMessageBox::critical(this," wrong format"," the distance threshold "+threshold+" is not a number");
+                    return;
+                }
+                arguments<<threshold;
+            }
             se = procdirRegion.absoluteFilePath();
         } else{
             arguments << "/tmp/segmentImage.png";

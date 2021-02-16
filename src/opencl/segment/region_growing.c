@@ -20,6 +20,16 @@
 
 size_t gws_align_region_growing;
 
+short isNumber(const char* string){
+	int i=0;
+	if(string==NULL)return 0;
+	while(string[i]!=0){
+		if(!isdigit(string[i])){return 0;}
+		i++;
+	}
+	return 1;
+}
+
 cl_event RGBtoLAB(cl_kernel RGBtoLAB_k, cl_command_queue que,
 	cl_mem d_labimg, cl_mem d_input, cl_int nrows, cl_int ncols)
 {
@@ -136,6 +146,10 @@ unsigned char* grayscale2RGBA(unsigned char* inputGray,int width, int height){
 
 int main(int argc, char ** args){
 	usage(argc);
+	if(!isNumber(args[2])){
+		fprintf(stderr, "Parameter not numeric, exiting\n");
+		exit(1);
+	}
 	int width,height,channels;
 	// caricamento immagine in memoria come array di unsigned char
 	unsigned char * img = stbi_load(args[1],&width,&height,&channels,STBI_rgb_alpha);
@@ -157,7 +171,7 @@ int main(int argc, char ** args){
     int num_regions = atoi(args[2]);
     printf("Number of regions to find: %d\n", num_regions);
 	cl_uint dist_threshold = 3;
-	if(argc == 5) dist_threshold = atoi(args[4]);
+	if(argc == 5 && isNumber(args[4])) dist_threshold = atoi(args[4]);
     printf("Distance for acceptance level in merging: %d\n", dist_threshold);
 
 	unsigned char * outimg = NULL;
