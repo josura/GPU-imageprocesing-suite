@@ -67,6 +67,15 @@ void MainWindow::setStrel(const QString strelname){
     }
 }
 
+bool isNumber(QString stringa){
+    if(stringa==NULL)return false;
+    for (int i =0;i<example.size();i++)
+    {
+        if (!example[i].isDigit())return false
+    }
+    return true;
+}
+
 void MainWindow::setMask(const QString maskname){
     QImage image(maskname);
     if(image.isNull()){
@@ -106,6 +115,12 @@ void MainWindow::on_pushButton_clicked()
                 ui->lineEdit_7->setText("0");
             }
             setMask(ui->lineEdit_6->text());
+            
+            if(isNumber(ui->lineEdit_7->text())){
+                QMessageBox::critical(this," wrong format"," the number of iterations "+ui->lineEdit_7->text()+" is not a number");
+                return;
+            }
+            
             if(changedMask){
                 arguments<<maskName<<ui->lineEdit_7->text();
                 changedMask=false;
