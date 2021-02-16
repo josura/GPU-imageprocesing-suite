@@ -25,6 +25,7 @@ public:
     QString imageName=NULL,strelName=NULL,processedName=NULL,ditheringProcessedName=NULL,maskName=NULL,segmentProcessedName=NULL;
     void setImage(const QString name);
     void setStrel(const QString strelname);
+    bool isNumber(QString);
     void setMask(const QString maskname);
     void showImage();
     void showProcessed();
