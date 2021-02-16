@@ -299,12 +299,26 @@ void MainWindow::on_pushButton_5_clicked()
     }
 }
 
+
 void MainWindow::on_pushButton_7_clicked()
 {
-    //TODO OPEN IN NEW WINDOW button for segmentation
+    imageDialog = new SecWindowImage(this);
+    if(imageDialog->setImage(segmentProcessedName))
+    imageDialog->show();
 }
 
 void MainWindow::on_pushButton_8_clicked()
 {
-    //TODO SAVE AS button for segmentation
+    int test=0;
+    if(segmentProcessedName==NULL){
+        QMessageBox::warning(this," warning","image not yet processed");
+    } else{
+        QString file_name = QFileDialog::getSaveFileName(this,"choose a name for the processed image",QDir::homePath(),"*.png");
+        QImage procImage(segmentProcessedName);
+        if(procImage.isNull()){
+            QMessageBox::critical(this," error","error while saving the image");
+        } else {
+            procImage.save(file_name);
+        }
+    }
 }
