@@ -19,7 +19,7 @@ void kernel dilationImage(global uchar4 * restrict d_output,
 	const int2 shift =dimStrel>>1; 
 	if (c < dim.x && r < dim.y) {
 		float4 centerpx = read_imagef(d_input,sampler,(float2)(c,r));
-		float2 coords = (float2)(c-shift.x, r-shift.y);
+		float2 coords = (float2)(c+shift.x, r+shift.y);
 		float4 pxresult = (float4)(0);
 		const float4 maxvalue = (float4)(1);
 		//0 is the minimum value for channel because UINT8_NORMALIZED
@@ -27,7 +27,7 @@ void kernel dilationImage(global uchar4 * restrict d_output,
 			//non so se fare prima righe o colonne, mi ricordo sia più veloce facendo le colonne
 			for(int j=0;j<dimStrel.y;j++){
 				const float2 strelcoords = (float2)(i,j);
-				const float2 finalcoords = coords + strelcoords;
+				const float2 finalcoords = coords - strelcoords;
 				float4 pxtmp = read_imagef(d_input, sampler, finalcoords);
 				const float4 strelpx = read_imagef(strel, sampler, strelcoords);
 				pxtmp = min(pxtmp+strelpx,maxvalue);
