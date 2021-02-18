@@ -346,11 +346,11 @@ unsigned char * fullErosion(unsigned char* image,unsigned char* strel,int imagew
 		0, NULL, NULL);
 	ocl_check(err, "unmap output");
 
-	//saving running times to runningTimesMorph.csv
+	//saving running times to ../../data/times/runningTimesMorph.csv
 	const double runtime_erosion_ms = runtime_ms(erosion_evt);
 	const double runtime_map_ms = runtime_ms(map_evt);
 	FILE * fd=NULL;
-	fd=fopen("runningTimesMorph.csv","a");
+	fd=fopen("../../data/times/runningTimesMorph.csv","a");
 	if(fd==NULL){
 		perror("Errore in apertura file");
 		exit(1);
@@ -480,11 +480,11 @@ unsigned char * fullDilation(unsigned char* image,unsigned char* strel,int image
 		0, NULL, NULL);
 	ocl_check(err, "unmap output");
 
-	//saving running times to runningTimesMorph.csv
+	//saving running times to ../../data/times/runningTimesMorph.csv
 	const double runtime_erosion_ms = runtime_ms(erosion_evt);
 	const double runtime_map_ms = runtime_ms(map_evt);
 	FILE * fd=NULL;
-	fd=fopen("runningTimesMorph.csv","a");
+	fd=fopen("../../data/times/runningTimesMorph.csv","a");
 	if(fd==NULL){
 		perror("Errore in apertura file");
 		exit(1);
@@ -655,13 +655,13 @@ unsigned char * fullGradient(unsigned char* image,unsigned char* strel,int image
 	err = clWaitForEvents(1, &map_evt);
 	ocl_check(err, "clfinish");
 
-	//saving running times to runningTimesMorph.csv
+	//saving running times to ../../data/times/runningTimesMorph.csv
 	const double runtime_erosion_ms = runtime_ms(erosion_evt);
 	const double runtime_dilation_ms = runtime_ms(dilation_evt);
 	const double runtime_difference_ms = runtime_ms(difference_evt);
 	const double runtime_map_ms = runtime_ms(map_evt);
 	FILE * fd=NULL;
-	fd=fopen("runningTimesMorph.csv","a");
+	fd=fopen("../../data/times/runningTimesMorph.csv","a");
 	if(fd==NULL){
 		perror("Errore in apertura file");
 		exit(1);
@@ -819,12 +819,12 @@ unsigned char * fullClosing(unsigned char* image,unsigned char* strel,int imagew
 		0, NULL, NULL);
 	ocl_check(err, "unmap output");
 
-	//saving running times to runningTimesMorph.csv
+	//saving running times to ../../data/times/runningTimesMorph.csv
 	const double runtime_erosion_ms = runtime_ms(erosion_evt);
 	const double runtime_dilation_ms = runtime_ms(dilation_evt);
 	const double runtime_map_ms = runtime_ms(map_evt);
 	FILE * fd=NULL;
-	fd=fopen("runningTimesMorph.csv","a");
+	fd=fopen("../../data/times/runningTimesMorph.csv","a");
 	if(fd==NULL){
 		perror("Errore in apertura file");
 		exit(1);
@@ -982,12 +982,12 @@ unsigned char * fullOpening(unsigned char* image,unsigned char* strel,int imagew
 		0, NULL, NULL);
 	ocl_check(err, "unmap output");
 
-	//saving running times to runningTimesMorph.csv
+	//saving running times to ../../data/times/runningTimesMorph.csv
 	const double runtime_erosion_ms = runtime_ms(erosion_evt);
 	const double runtime_dilation_ms = runtime_ms(dilation_evt);
 	const double runtime_map_ms = runtime_ms(map_evt);
 	FILE * fd=NULL;
-	fd=fopen("runningTimesMorph.csv","a");
+	fd=fopen("../../data/times/runningTimesMorph.csv","a");
 	if(fd==NULL){
 		perror("Errore in apertura file");
 		exit(1);
@@ -1168,13 +1168,13 @@ unsigned char * fullTophat(unsigned char* image,unsigned char* strel,int imagewi
 		0, NULL, NULL);
 	ocl_check(err, "unmap output");
 
-	//saving running times to runningTimesMorph.csv
+	//saving running times to ../../data/times/runningTimesMorph.csv
 	const double runtime_erosion_ms = runtime_ms(erosion_evt);
 	const double runtime_dilation_ms = runtime_ms(dilation_evt);
 	const double runtime_difference_ms = runtime_ms(difference_evt);
 	const double runtime_map_ms = runtime_ms(map_evt);
 	FILE * fd=NULL;
-	fd=fopen("runningTimesMorph.csv","a");
+	fd=fopen("../../data/times/runningTimesMorph.csv","a");
 	if(fd==NULL){
 		perror("Errore in apertura file");
 		exit(1);
@@ -1359,13 +1359,13 @@ unsigned char * fullBottomhat(unsigned char* image,unsigned char* strel,int imag
 		0, NULL, NULL);
 	ocl_check(err, "unmap output");
 
-	//saving running times to runningTimesMorph.csv
+	//saving running times to ../../data/times/runningTimesMorph.csv
 	const double runtime_erosion_ms = runtime_ms(erosion_evt);
 	const double runtime_dilation_ms = runtime_ms(dilation_evt);
 	const double runtime_difference_ms = runtime_ms(difference_evt);
 	const double runtime_map_ms = runtime_ms(map_evt);
 	FILE * fd=NULL;
-	fd=fopen("runningTimesMorph.csv","a");
+	fd=fopen("../../data/times/runningTimesMorph.csv","a");
 	if(fd==NULL){
 		perror("Errore in apertura file");
 		exit(1);
@@ -1597,13 +1597,13 @@ unsigned char * fullHitorMiss(unsigned char* image,unsigned char* strel,int imag
 	err = clWaitForEvents(1, &map_evt);
 	ocl_check(err, "clfinish");
 
-	//saving running times to runningTimesMorph.csv
+	//saving running times to ../../data/times/runningTimesMorph.csv
 	const double runtime_erosion_ms = runtime_ms(erosion_evt);
 	const double runtime_complement_ms = runtime_ms(complement_evt);
 	const double runtime_minimum_ms = runtime_ms(minimum_evt);
 	const double runtime_map_ms = runtime_ms(map_evt);
 	FILE * fd=NULL;
-	fd=fopen("runningTimesMorph.csv","a");
+	fd=fopen("../../data/times/runningTimesMorph.csv","a");
 	if(fd==NULL){
 		perror("Errore in apertura file");
 		exit(1);
@@ -1808,10 +1808,10 @@ unsigned char* fullGeodesicErosion(unsigned char* image,unsigned char* mask,unsi
 
 	}
 
-	//saving running times to runningTimesMorph.csv
+	//saving running times to ../../data/times/runningTimesMorph.csv
 		
 	FILE * fd=NULL;
-	fd=fopen("runningTimesMorph.csv","a");
+	fd=fopen("../../data/times/runningTimesMorph.csv","a");
 	if(fd==NULL){
 		perror("Errore in apertura file");
 		exit(1);
@@ -2015,10 +2015,10 @@ unsigned char* fullGeodesicDilation(unsigned char* image,unsigned char* mask,uns
 
 	}
 
-	//saving running times to runningTimesMorph.csv
+	//saving running times to ../../data/times/runningTimesMorph.csv
 		
 	FILE * fd=NULL;
-	fd=fopen("runningTimesMorph.csv","a");
+	fd=fopen("../../data/times/runningTimesMorph.csv","a");
 	if(fd==NULL){
 		perror("Errore in apertura file");
 		exit(1);

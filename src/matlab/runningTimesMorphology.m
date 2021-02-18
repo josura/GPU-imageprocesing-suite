@@ -1,6 +1,6 @@
 
-image =imread("../img/nature.png");
-mask = imread("../img/nature.png");
+image =imread("../img/trip.png");
+mask = imread("../img/trip.png");
 imagedimension=size(image);
 strelement = strel(8);
 hitmissimage=imread("../strel/squareflat3x3.png");
