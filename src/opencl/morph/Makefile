@@ -3,7 +3,7 @@ LDLIBS=-lOpenCL -pthread -lm
 
 
 TARGETS+= erosion dilation difference complement opening closing gradient tophat bottomhat
-TARGETS+= morphology morphologyTest
+TARGETS+= morphology morphologyTest morphologyRunningTimesTest
 
 all: $(TARGETS)
 

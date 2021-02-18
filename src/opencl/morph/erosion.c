@@ -204,6 +204,19 @@ int main(int argc, char ** args){
 	printf("map: %dx%d int in %gms: %g GB/s %g GE/s\n",
 		dstheight, dstwidth, runtime_map_ms, map_bw_gbs, dstheight*dstwidth/1.0e6/runtime_map_ms);
 
+	FILE * fd=NULL;
+	fd=fopen("runningTimesMorph.csv","a");
+	if(fd==NULL){
+		perror("Errore in apertura file");
+		exit(1);
+	}
+
+	fprintf(fd,"%s,%s,%g,%i,%i\n","OpenCL","erosion",runtime_erosion_ms,width,height);
+	
+	
+	fclose(fd);
+
+
 	char outputImage[128];
 	sprintf(outputImage,"%s",args[3]);
 	printf("image saved as %s\n",outputImage);
