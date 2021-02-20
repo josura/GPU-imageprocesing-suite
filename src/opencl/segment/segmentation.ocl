@@ -490,7 +490,6 @@ void kernel region_growing(global int * restrict region_labels,
 
 				const int ni = global_index(neigh_coords, dim.x);
 				neigh_region = region_labels[ni];
-				neigh_explore = explore_labels[ni];
 				
 				//Check if neighbor is close enough and is not in another region
 				if(neigh_region==0 && deltaE(px.s012, neigh_px.s012)<dist_threshold){
