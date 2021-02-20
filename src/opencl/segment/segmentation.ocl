@@ -54,8 +54,54 @@ void kernel histogram(global int * restrict histogram,
 	}
 }
 
-//Otsu: compute interclass variance and then max reduction with local memory
 kernel void otsu(global float * restrict probs, global float * restrict cumulative_means, 
+	global float2 * restrict max_wg_k, local float2 * restrict lmem, const float g_mean){
+	
+	const int gi = get_global_id(0);
+
+	const float prob1 = probs[gi];
+	const float cumulative_mean1 = cumulative_means[gi];
+	const float prob2 = 1.0f - prob1;
+	const float num = (g_mean*prob1)-cumulative_mean1;
+	
+	const float log_prob1 = log(prob1);
+	const float log_num = log(num);
+	const float log_prob2 = log(prob2);
+
+	const float interclass_var = exp(2*num-log_prob1-log_prob2);
+
+	float2 lmax;
+
+	//Ignore black and white
+	if(gi==255 || gi==0) lmax.x = 0.0f;
+	else lmax.x = interclass_var;
+
+	//Save bit representation of index
+	lmax.y = *((float*)(&gi));
+
+	const int i = get_local_id(0);
+	lmem[i] = lmax;
+	int working = get_local_size(0) >> 1;
+	float2 lval;
+	while(working > 0){
+		barrier(CLK_LOCAL_MEM_FENCE);
+		if (i < working) {
+			lval = lmem[i+working];
+			if(lmax.x < lval.x){
+				lmax = lval;
+				lmem[i] = lmax;
+			}
+		}
+		working >>= 1;
+	}
+	if (i == 0){
+		max_wg_k[get_group_id(0)] = lmax;
+	}
+
+}
+
+//Otsu: compute interclass variance and then max reduction with local memory
+kernel void otsu_alternative(global float * restrict probs, global float * restrict cumulative_means, 
 	global float2 * restrict max_wg_k, local float2 * restrict lmem, const float g_mean){
 	
 	const int gi = get_global_id(0);
