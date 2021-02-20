@@ -54,13 +54,154 @@ void kernel histogram(global int * restrict histogram,
 	}
 }
 
-kernel void otsu(global float * restrict probs, global float * restrict cumulative_means, 
+// a / b, rounding up
+uint div_up(uint a, uint b)
+{
+	return (a + b - 1)/b;
+}
+
+// round a to the next multiple of b
+uint round_mul_up(uint a, uint b)
+{
+	return div_up(a, b)*b;
+}
+
+float2 scan_pass(int gi, int nels,
+	global float2 * restrict out,
+	local float2 * restrict lmem,
+	float2 corr, float2 acc)
+{
+	const uint li = get_local_id(0);
+	const uint lws = get_local_size(0);
+
+	uint write_mask = 1U;
+	uint read_mask = ~0U;
+
+	lmem[li] = acc;
+	while (write_mask < lws) {
+		barrier(CLK_LOCAL_MEM_FENCE);
+
+		if (li & write_mask) {
+			acc += lmem[(li & read_mask) - 1];
+			lmem[li] = acc;
+		}
+		write_mask <<= 1;
+		read_mask <<= 1;
+	}
+
+	acc += corr;
+	if (gi < nels)
+		out[gi] = acc;
+
+	barrier(CLK_LOCAL_MEM_FENCE);
+	corr += lmem[lws - 1];
+
+	// ensure that lmem[i] on the next cycle
+	// from the last work-item does not
+	// overwrite lmem[lws-1] before all other
+	// work-item read it
+	barrier(CLK_LOCAL_MEM_FENCE);
+	return corr;
+}
+
+/* single-work-group version: used to scan the tails of the partial scans */
+kernel void scan1_lmem(global float2 * restrict out,
+	global const float2 * restrict in,
+	local float2 * restrict lmem, /* one element per work-item */
+	uint nels)
+{
+	const uint gws = get_global_size(0);
+	const uint lws = get_local_size(0);
+	const uint li = get_local_id(0);
+
+	const uint limit = round_mul_up(nels, lws);
+
+	uint gi = get_global_id(0);
+	float2 corr = (float2)(0);
+
+	float2 acc;
+
+	while (gi < limit) {
+		acc = in[gi];
+		corr = scan_pass(gi, nels, out, lmem, corr, acc);
+		gi += get_local_size(0);
+	}
+}
+
+/* multi-work-group version */
+kernel void scanN_lmem(global float2 * restrict probs_means,
+	global float2 * restrict tails,
+	global const int * restrict histogram,
+	local float2 * restrict lmem, /* one element per work-item */
+	uint global_nels, float n_pixels)
+{
+	const uint lws = get_local_size(0);
+
+	// number of elements for the single work-group:
+	// start by dividing the total number of elements by the number of groups,
+	// rounding up
+	uint local_nels = div_up(global_nels, get_num_groups(0));
+	// round up to the next multiple of lws
+	local_nels = round_mul_up(local_nels, lws);
+
+	const uint begin = get_group_id(0)*local_nels;
+	const uint end = min(begin + local_nels, global_nels);
+	const uint limit = round_mul_up(end, lws);
+	float2 corr = (float2)(0);
+
+	uint gi = begin + get_local_id(0);
+	float2 acc;
+
+	while (gi < limit) {
+		const float prob = ((float)histogram[gi])/n_pixels;
+		//printf("Gi %d, prob: %f\n", gi, prob);
+		acc = (float2)(prob, gi*prob);
+		corr = scan_pass(gi, global_nels, probs_means, lmem, corr, acc);
+		gi += lws;
+	}
+
+	if (get_local_id(0) == 0)
+		tails[get_group_id(0)] = corr;
+}
+
+/* fixup the partial scans with the scanned tails */
+kernel void scanN_fixup(global float2 * restrict out,
+	global const float2 * restrict tails,
+	uint global_nels)
+{
+	if (get_group_id(0) == 0) return;
+
+	const uint lws = get_local_size(0);
+
+	// number of elements for the single work-group:
+	// start by dividing the total number of elements by the number of groups,
+	// rounding up
+	uint local_nels = div_up(global_nels, get_num_groups(0));
+	// round up to the next multiple of lws
+	local_nels = round_mul_up(local_nels, lws);
+
+	const uint begin = get_group_id(0)*local_nels;
+	const uint end = min(begin + local_nels, global_nels);
+	const float2 corr = tails[get_group_id(0)-1];
+
+	uint gi = begin + get_local_id(0);
+	while (gi < end) {
+		out[gi] += corr;
+		gi += lws;
+	}
+
+}
+
+//Otsu: compute interclass variance and then max reduction with local memory
+kernel void otsu(global float2 * restrict probs_means, 
 	global float2 * restrict max_wg_k, local float2 * restrict lmem, const float g_mean){
 	
 	const int gi = get_global_id(0);
+	const float2 prob_mean = probs_means[gi];
 
-	const float prob1 = probs[gi];
-	const float cumulative_mean1 = cumulative_means[gi];
+	const float prob1 = prob_mean.x;
+	const float cumulative_mean1 = prob_mean.y;
+
 	const float prob2 = 1.0f - prob1;
 	const float num = (g_mean*prob1)-cumulative_mean1;
 	
@@ -68,7 +209,7 @@ kernel void otsu(global float * restrict probs, global float * restrict cumulati
 	const float log_num = log(num);
 	const float log_prob2 = log(prob2);
 
-	const float interclass_var = exp(2*num-log_prob1-log_prob2);
+	const float interclass_var = exp(2*log_num-log_prob1-log_prob2);
 
 	float2 lmax;
 
@@ -101,13 +242,14 @@ kernel void otsu(global float * restrict probs, global float * restrict cumulati
 }
 
 //Otsu: compute interclass variance and then max reduction with local memory
-kernel void otsu_alternative(global float * restrict probs, global float * restrict cumulative_means, 
+kernel void otsu_alternative(global float2 * restrict probs_means, 
 	global float2 * restrict max_wg_k, local float2 * restrict lmem, const float g_mean){
 	
 	const int gi = get_global_id(0);
+	const float2 prob_mean = probs_means[gi];
 
-	const float prob1 = probs[gi];
-	const float cumulative_mean1 = cumulative_means[gi];
+	const float prob1 = prob_mean.x;
+	const float cumulative_mean1 = prob_mean.y;
 
 	const float prob2 = 1.0f - prob1;
 
@@ -153,7 +295,6 @@ kernel void reducemax(global float2 * restrict max_wg_k, global int * restrict m
 
 	float2 lmax = max_wg_k[gi];
 	float k = lmax.y;
-	int real_k = *((int*)(&k));
 
 	const int i = get_local_id(0);
 	lmem[i] = lmax;
@@ -175,6 +316,7 @@ kernel void reducemax(global float2 * restrict max_wg_k, global int * restrict m
 		float k = lmax.y;
 		int real_k = *((int*)(&k));
 		max_k[get_group_id(0)] = real_k;
+		//printf("%d, interclass var %f\n", real_k, lmax.x);
 	}
 
 }

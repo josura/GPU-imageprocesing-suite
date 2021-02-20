@@ -49,8 +49,116 @@ cl_event histogram(cl_kernel histogram_k, cl_command_queue que, cl_mem d_input,
 	return histogram_evt;
 }
 
+cl_event scanN(cl_kernel scanN_k, cl_command_queue que,
+	cl_mem d_vsum, cl_mem d_tails, cl_mem d_v1, cl_int nels,
+	cl_int lws_, cl_int nwg, float n_pixels,
+	cl_event init_evt)
+{
+	const size_t gws[] = { nwg*lws_ };
+	const size_t lws[] = { lws_ };
+	cl_event scanN_evt;
+	cl_int err;
+
+	cl_uint i = 0;
+	err = clSetKernelArg(scanN_k, i++, sizeof(d_vsum), &d_vsum);
+	ocl_check(err, "set scanN arg", i-1);
+	err = clSetKernelArg(scanN_k, i++, sizeof(d_tails), &d_tails);
+	ocl_check(err, "set scanN arg %d", i-1);
+	err = clSetKernelArg(scanN_k, i++, sizeof(d_v1), &d_v1);
+	ocl_check(err, "set scanN arg %d", i-1);
+	err = clSetKernelArg(scanN_k, i++, sizeof(float)*2*lws[0], NULL);
+	ocl_check(err, "set scanN arg %d", i-1);
+	err = clSetKernelArg(scanN_k, i++, sizeof(nels), &nels);
+	ocl_check(err, "set scanN arg %d", i-1);
+	err = clSetKernelArg(scanN_k, i++, sizeof(n_pixels), &n_pixels);
+	ocl_check(err, "set scanN arg %d", i-1);
+
+	err = clEnqueueNDRangeKernel(que, scanN_k, 1,
+		NULL, gws, lws,
+		1, &init_evt, &scanN_evt);
+
+	ocl_check(err, "enqueue scanN_lmem");
+
+	err = clFinish(que);
+
+	ocl_check(err, "finish que");
+
+
+	return scanN_evt;
+}
+
+cl_event scan1(cl_kernel scan1_k, cl_command_queue que,
+	cl_mem d_vsum, cl_mem d_tails, cl_mem d_v1, cl_int nels,
+	cl_int lws_, cl_int nwg,
+	cl_event init_evt)
+{
+	const size_t gws[] = { nwg*lws_ };
+	const size_t lws[] = { lws_ };
+	cl_event scan1_evt;
+	cl_int err;
+
+	cl_uint i = 0;
+	err = clSetKernelArg(scan1_k, i++, sizeof(d_vsum), &d_vsum);
+	ocl_check(err, "set scan1 arg", i-1);
+	if (nwg > 1) {
+		err = clSetKernelArg(scan1_k, i++, sizeof(d_tails), &d_tails);
+		ocl_check(err, "set scan1 arg %d", i-1);
+	}
+	err = clSetKernelArg(scan1_k, i++, sizeof(d_v1), &d_v1);
+	ocl_check(err, "set scan1 arg %d", i-1);
+	err = clSetKernelArg(scan1_k, i++, sizeof(float)*2*lws[0], NULL);
+	ocl_check(err, "set scan1 arg %d", i-1);
+	err = clSetKernelArg(scan1_k, i++, sizeof(nels), &nels);
+	ocl_check(err, "set scan1 arg %d", i-1);
+
+	err = clEnqueueNDRangeKernel(que, scan1_k, 1,
+		NULL, gws, lws,
+		1, &init_evt, &scan1_evt);
+
+	ocl_check(err, "enqueue scan_lmem");
+
+	err = clFinish(que);
+
+	ocl_check(err, "finish que");
+
+
+	return scan1_evt;
+}
+
+cl_event fixup(cl_kernel fixup_k, cl_command_queue que,
+	cl_mem d_vsum, cl_mem d_tails, cl_int nels,
+	cl_int lws_, cl_int nwg,
+	cl_event init_evt)
+{
+	const size_t gws[] = { nwg*lws_ };
+	const size_t lws[] = { lws_ };
+	cl_event fixup_evt;
+	cl_int err;
+
+	cl_uint i = 0;
+	err = clSetKernelArg(fixup_k, i++, sizeof(d_vsum), &d_vsum);
+	ocl_check(err, "set fixup arg %d", i-1);
+	err = clSetKernelArg(fixup_k, i++, sizeof(d_tails), &d_tails);
+	ocl_check(err, "set fixup arg %d", i-1);
+	err = clSetKernelArg(fixup_k, i++, sizeof(nels), &nels);
+	ocl_check(err, "set fixup arg %d", i-1);
+
+	err = clEnqueueNDRangeKernel(que, fixup_k, 1,
+		NULL, gws, lws,
+		1, &init_evt, &fixup_evt);
+
+	ocl_check(err, "enqueue scan_lmem");
+
+	err = clFinish(que);
+
+	ocl_check(err, "finish que");
+
+
+	return fixup_evt;
+}
+
 cl_event otsu(cl_kernel otsu_k, cl_command_queue que, int _gws, int _lws,
-	cl_mem d_probs, cl_mem d_cumulative_means, cl_mem d_max_wg_k, float g_mean)
+	cl_mem d_probs_means, cl_mem d_max_wg_k, float g_mean)
 {
 	const size_t gws[] = { _gws };
 	const size_t lws[] = { _lws };
@@ -58,9 +166,7 @@ cl_event otsu(cl_kernel otsu_k, cl_command_queue que, int _gws, int _lws,
 	cl_int err;
 
 	cl_uint i = 0;
-	err = clSetKernelArg(otsu_k, i++, sizeof(d_probs), &d_probs);
-	ocl_check(err, "set otsu arg %d", i-1);
-	err = clSetKernelArg(otsu_k, i++, sizeof(d_cumulative_means), &d_cumulative_means);
+	err = clSetKernelArg(otsu_k, i++, sizeof(d_probs_means), &d_probs_means);
 	ocl_check(err, "set otsu arg %d", i-1);
 	err = clSetKernelArg(otsu_k, i++, sizeof(d_max_wg_k), &d_max_wg_k);
 	ocl_check(err, "set otsu arg %d", i-1);
@@ -218,6 +324,12 @@ int main(int argc, char ** args){
 	int err=0;
 	cl_kernel histogram_k = clCreateKernel(prog, "histogram", &err);
 	ocl_check(err, "create kernel histogram");
+	cl_kernel scan1_k = clCreateKernel(prog, "scan1_lmem", &err);
+	ocl_check(err, "create kernel scan1_lmem");
+	cl_kernel scanN_k = clCreateKernel(prog, "scanN_lmem", &err);
+	ocl_check(err, "create kernel scanN_lmem");
+	cl_kernel fixup_k = clCreateKernel(prog, "scanN_fixup", &err);
+	ocl_check(err, "create kernel scanN_fixup");
 	cl_kernel otsu_k = clCreateKernel(prog, "otsu", &err);
 	ocl_check(err, "create kernel otsu");
 	cl_kernel reducemax_k = clCreateKernel(prog, "reducemax", &err);
@@ -235,7 +347,10 @@ int main(int argc, char ** args){
 		sizeof(gws_align_binarization), &gws_align_binarization, NULL);
 	ocl_check(err, "preferred wg multiple for binarization");
 
-	cl_mem d_input = NULL, d_output = NULL, d_histogram = NULL, d_cumulative_means = NULL, d_probs = NULL, d_max_wg_k = NULL, d_max_k = NULL;
+	cl_int lws = gws_align_histogram;
+	cl_int nwg = 256/lws;
+
+	cl_mem d_input = NULL, d_output = NULL, d_histogram = NULL, d_tails = NULL, d_probs_means = NULL, d_max_wg_k = NULL, d_max_k = NULL;
 
 	const cl_image_format fmt = {
 		.image_channel_order = CL_RGBA,
@@ -262,7 +377,7 @@ int main(int argc, char ** args){
 	ocl_check(err, "create buffer d_output");
 
 	d_histogram = clCreateBuffer(ctx,
-	CL_MEM_WRITE_ONLY | CL_MEM_HOST_READ_ONLY | CL_MEM_ALLOC_HOST_PTR,
+	CL_MEM_READ_WRITE,
 	sizeof(cl_int)*256, NULL,
 		&err);
 	ocl_check(err, "create buffer d_histogram");
@@ -279,34 +394,41 @@ int main(int argc, char ** args){
 		&err);
 	ocl_check(err, "create buffer d_max_k");
 
-	cl_event histogram_evt, map_hist_evt, otsu_evt, reducemax_evt, map_k_evt, binarization_evt, map_output_evt;
+	cl_event histogram_evt, map_hist_evt, scan_evt[3], otsu_evt, reducemax_evt, map_k_evt, binarization_evt, map_output_evt;
 	
 	histogram_evt = histogram(histogram_k, que, d_input, d_histogram, height, width);
-	int * hist = clEnqueueMapBuffer(que, d_histogram, CL_TRUE,
-		CL_MAP_READ,
-		0, sizeof(cl_int)*256,
-		1, &histogram_evt, &map_hist_evt, &err);
-	ocl_check(err, "enqueue map d_histogram");
+	
+	d_probs_means = clCreateBuffer(ctx,
+	CL_MEM_READ_WRITE,
+	sizeof(float)*256*2, NULL,
+		&err);
+	ocl_check(err, "create buffer d_probs_means");
+	d_tails = clCreateBuffer(ctx,
+	CL_MEM_READ_WRITE,
+	sizeof(float)*2*nwg, NULL,
+		&err);
+	ocl_check(err, "create buffer d_tails");
 
-	float * probs = malloc(sizeof(float)*256);
-	float * cumulative_means = malloc(sizeof(float)*256);
-	host_probs_means(hist, height*width, probs, cumulative_means);
-	
-	d_probs = clCreateBuffer(ctx,
-	CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
-	sizeof(float)*256, probs,
-		&err);
-	ocl_check(err, "create buffer d_probs");
-	d_cumulative_means = clCreateBuffer(ctx,
-	CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
-	sizeof(float)*256, cumulative_means,
-		&err);
-	ocl_check(err, "create buffer d_cumulative_means");
-	
-	float g_mean = cumulative_means[255];
+	float n_pixels = (float)(width*height);
+
+	// riduco il datasize originale ad nwg elementi
+	scan_evt[0] = scanN(scanN_k, que, d_probs_means, d_tails, d_histogram, 256,
+		lws, nwg, n_pixels, histogram_evt);
+	if (nwg > 1) {
+		scan_evt[1] = scan1(scan1_k, que, d_tails, NULL, d_tails, nwg,
+			lws, 1, scan_evt[0]);
+		scan_evt[2] = fixup(fixup_k, que, d_probs_means, d_tails, 256, lws, nwg,
+			scan_evt[1]);
+	} else {
+		scan_evt[2] = scan_evt[1] = scan_evt[0];
+	}
+
+	float g_mean;
+	//Read g_mean in d_probs_means[255].y
+	clEnqueueReadBuffer(que, d_probs_means, CL_TRUE, sizeof(float)*2*255+sizeof(float), sizeof(float), &g_mean, 1, scan_evt+2, NULL);
 	printf("Global mean is %f\n", g_mean);
 	
-	otsu_evt = otsu(otsu_k, que, 256, 32, d_probs, d_cumulative_means, d_max_wg_k, g_mean);
+	otsu_evt = otsu(otsu_k, que, 256, 32, d_probs_means, d_max_wg_k, g_mean);
 	reducemax_evt = reducemax(reducemax_k, que, 8, 8, d_max_wg_k, d_max_k, otsu_evt);
 
 	cl_int * threshold = clEnqueueMapBuffer(que, d_max_k, CL_TRUE,
@@ -361,7 +483,5 @@ int main(int argc, char ** args){
 	clReleaseContext(ctx);
 
 	stbi_image_free(img);
-	free(probs);
-	free(cumulative_means);
 	return 0;
 }
