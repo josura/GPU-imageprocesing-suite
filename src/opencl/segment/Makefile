@@ -2,7 +2,7 @@ LDLIBS=-lOpenCL -pthread -lm
 #LDLIBS=-framework OpenCL
 
 
-TARGETS += otsu region_growing
+TARGETS += otsu otsu_cpu region_growing
 
 all: $(TARGETS)
 
