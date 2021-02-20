@@ -15,7 +15,7 @@
 
 #define CL_TARGET_OPENCL_VERSION 120
 #define MAX_SEED_TRIES 512
-#define MAX_GROWTHS 1024
+#define MAX_GROWTHS 4096
 #include "../ocl_boiler.h"
 
 
@@ -253,7 +253,7 @@ int main(int argc, char ** args){
 	host_unfinished_flag[0] = 1;
 
 	d_unfinished_flag = clCreateBuffer(ctx,
-	CL_MEM_WRITE_ONLY | CL_MEM_HOST_READ_ONLY | CL_MEM_COPY_HOST_PTR,
+	CL_MEM_WRITE_ONLY | CL_MEM_COPY_HOST_PTR,
 	sizeof(cl_int), host_unfinished_flag,
 		&err);
 	ocl_check(err, "create buffer d_explore_labels");
@@ -294,6 +294,7 @@ int main(int argc, char ** args){
 		}
 		clEnqueueWriteBuffer(que, d_region_labels, CL_TRUE, 0, width*height*sizeof(cl_int), h_region_labels, 0, NULL, NULL);
 		clEnqueueWriteBuffer(que, d_explore_labels, CL_TRUE, 0, width*height*sizeof(cl_uchar), h_explore_labels, 0, NULL, NULL);
+		*host_unfinished_flag = 1;
 		while(*host_unfinished_flag && n_iter[curr_region]<MAX_GROWTHS){
 			*host_unfinished_flag = 0;
 			clEnqueueWriteBuffer(que, d_unfinished_flag, CL_TRUE, 0, sizeof(cl_int), host_unfinished_flag, 0, NULL, NULL);
@@ -308,7 +309,8 @@ int main(int argc, char ** args){
 		if(n_iter[curr_region]>=MAX_GROWTHS){
 			printf("Exausted number of growing cycles (%d) on region %d, going to the next region\n", n_iter[curr_region], curr_region+1);
 			continue;
-		}	
+		}
+		printf("Region %d finished with %d iterations\n", curr_region+1, n_iter[curr_region]);	
 	}
 	int final_num_regions = curr_region;
 	printf("Region growing finished, %d regions found!\n", final_num_regions);
@@ -329,10 +331,9 @@ int main(int argc, char ** args){
 	
 	const double runtime_RGBtoLAB_ms = runtime_ms(RGBtoLAB_evt);
 	double runtime_region_growing_ms = 0;
-	for(int i=0; i<final_num_regions-1; ++i){
-		runtime_region_growing_ms +=  total_runtime_ms(region_growing_evt[i][0], region_growing_evt[i][n_iter[final_num_regions-1]]);
+	for(int i=0; i<final_num_regions; ++i){
+		runtime_region_growing_ms +=  total_runtime_ms(region_growing_evt[i][0], region_growing_evt[i][n_iter[i]-1]);
 	}
-	runtime_region_growing_ms += total_runtime_ms(region_growing_evt[final_num_regions-1][0], region_growing_evt[final_num_regions-1][n_iter[final_num_regions-1]-2]);
 	const double runtime_color_regions_ms = runtime_ms(color_regions_evt);
 	const double runtime_map_ms = runtime_ms(map_img_evt);
 
