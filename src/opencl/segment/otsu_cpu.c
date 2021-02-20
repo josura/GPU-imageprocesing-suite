@@ -238,6 +238,7 @@ int main(int argc, char ** args){
 	const double runtime_otsu_ms = (end_otsu - start_otsu)*1.0e3/CLOCKS_PER_SEC;
 	const double runtime_binarization_ms = runtime_ms(binarization_evt);
 	const double runtime_map_ms = runtime_ms(map_output_evt);
+	const double total_runtime_ms = runtime_histogram_ms+runtime_otsu_ms+runtime_binarization_ms+runtime_map_ms;
 
 	const double histogram_bw_gbs = dstdata_size/1.0e6/runtime_histogram_ms;
 	const double otsu_bw_gbs = sizeof(float)*256*2/1.0e6/runtime_otsu_ms;
@@ -252,6 +253,7 @@ int main(int argc, char ** args){
 		height, width, runtime_binarization_ms, binarization_bw_gbs, height*width/1.0e6/runtime_binarization_ms);
 	printf("map: %dx%d int in %gms: %g GB/s %g GE/s\n",
 		dstheight, dstwidth, runtime_map_ms, map_bw_gbs, dstheight*dstwidth/1.0e6/runtime_map_ms);
+	printf("Total runtime: %g ms\n", total_runtime_ms);
 
 	char outputImage[128];
 	sprintf(outputImage,"%s",args[2]);

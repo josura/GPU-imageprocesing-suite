@@ -446,23 +446,29 @@ int main(int argc, char ** args){
 	ocl_check(err, "enqueue map d_output");
 
 	const double runtime_histogram_ms = runtime_ms(histogram_evt);
-	const double runtime_otsu_ms = runtime_ms(otsu_evt);
+	const double runtime_scan_ms = total_runtime_ms(scan_evt[0], scan_evt[2]);
+	const double runtime_otsu_ms = total_runtime_ms(otsu_evt, reducemax_evt);
 	const double runtime_binarization_ms = runtime_ms(binarization_evt);
 	const double runtime_map_ms = runtime_ms(map_output_evt);
+	const double total_runtime_ms = runtime_histogram_ms+runtime_scan_ms+runtime_otsu_ms+runtime_binarization_ms+runtime_map_ms;
 
 	const double histogram_bw_gbs = dstdata_size/1.0e6/runtime_histogram_ms;
+	const double scan_bw_gbs = sizeof(float)*256*2/1.0e6/runtime_scan_ms;
 	const double otsu_bw_gbs = sizeof(float)*256*2/1.0e6/runtime_otsu_ms;
 	const double binarization_bw_gbs = dstdata_size/1.0e6/runtime_binarization_ms;
 	const double map_bw_gbs = dstdata_size/1.0e6/runtime_map_ms;
 
 	printf("histogram: %dx%d uint in %gms: %g GB/s %g GE/s\n",
 		height, width, runtime_histogram_ms, histogram_bw_gbs, height*width/1.0e6/runtime_histogram_ms);
+	printf("scan : 256 probabilities and 256 means computed in %gms: %g GE/s\n",
+		runtime_scan_ms, 256*2/1.0e6/runtime_scan_ms);
 	printf("otsu: 256 interclass variances computed and reduced in %gms: %g GB/s %g GE/s\n",
 		runtime_otsu_ms, otsu_bw_gbs, 256/1.0e6/runtime_otsu_ms);
 	printf("binarization: %dx%d uint in %gms: %g GB/s %g GE/s\n",
 		height, width, runtime_binarization_ms, binarization_bw_gbs, height*width/1.0e6/runtime_binarization_ms);
 	printf("map: %dx%d int in %gms: %g GB/s %g GE/s\n",
 		dstheight, dstwidth, runtime_map_ms, map_bw_gbs, dstheight*dstwidth/1.0e6/runtime_map_ms);
+	printf("Total runtime: %g ms\n", total_runtime_ms);
 
 	char outputImage[128];
 	sprintf(outputImage,"%s",args[2]);
