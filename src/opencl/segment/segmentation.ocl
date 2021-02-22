@@ -3,43 +3,6 @@ const sampler_t sampler =
 	CLK_ADDRESS_CLAMP_TO_EDGE|
 	CLK_FILTER_LINEAR;
 
-
-
-//MWC64x, an RNG made by David B. Tomas, with custom seeding
-//Source: http://cas.ee.ic.ac.uk/people/dt10/research/rngs-gpu-mwc64x.html
-
-typedef struct{ uint4 x; uint4 c; } mwc64xvec4_state_t;
-
-inline float4 MWC64XVEC4(mwc64xvec4_state_t *s, float leftLimit, float rightLimit)
-{
-    enum{ MWC64XVEC4_A = 4294883355U };
-    uint4 x=s->x, c=s->c;
-    uint4 res=x^c;                     // Calculate the result
-    uint4 hi=mul_hi(x,MWC64XVEC4_A);              // Step the RNG
-    x=x*MWC64XVEC4_A+c;
-    c=hi+convert_uint4(x<c);
-    s->x=x;
-    s->c=c;             // Pack the state back up
-    return leftLimit + convert_float4(res)*((rightLimit - leftLimit)/4294967295);
-}
-
-//Another simple RNG (often used in hashing) to randomize local id or global id
-inline uint randomizeId(uint id)
-{
-        id = (id ^ 61) ^ (id >> 16);
-        id *= 9;
-        id = id ^ (id >> 4);
-        id *= 0x27d4eb2d;
-        id = id ^ (id >> 15);
-        return id;
- }
-
-//Mix seeds with randomized global id
-inline void MWC64XVEC4_Seeding(mwc64xvec4_state_t *s, int gi, uint4 seeds){
-	s->x = (uint4)((seeds.x) ^ randomizeId(gi), (seeds.y*seeds.z) ^ randomizeId(gi), (seeds.y*(seeds.w & 131071)) ^ randomizeId(gi), ((seeds.x & 131071)*seeds.y) ^ randomizeId(gi));
-	s->c = (uint4)((seeds.w) ^ randomizeId(gi), (seeds.w ^ seeds.x) ^ randomizeId(gi), (seeds.z*seeds.x) ^ randomizeId(gi), (seeds.z*(seeds.w & 131071)) ^ randomizeId(gi));
-}
-
 //Compute histogram easily with atomics
 void kernel histogram(global int * restrict histogram, 
 	read_only image2d_t d_input){
@@ -335,7 +298,7 @@ void kernel binarization(global uchar4 * restrict d_output,
 		const int gi = j*dim.x+i;
 
 		const uint4 px = read_imageui(d_input, sampler, (int2)(i,j));
-		const uchar4 newpx = (uchar4)((px.x > threshold)*255);
+		uchar4 newpx = (uchar4)((px.x > threshold)*255);
 		newpx.w = (uchar)(px.w);
 		
 		d_output[gi] = newpx;
@@ -374,7 +337,7 @@ void kernel RGBtoLAB(read_only image2d_t input,
 		n_px.y = 500*(n_px.x - n_px.y);
 		n_px.z = 200*(n_px.y-n_px.z);
 
-		const uint4 newpx = convert_uint4(n_px);
+		uint4 newpx = convert_uint4(n_px);
 		newpx.w = alpha;
 		
 		write_imageui(output, coords, newpx);
@@ -412,7 +375,7 @@ void kernel LABtoRGB(read_only image2d_t input,
 		
 		n_px = max((float4)(0), min((float4)(1), n_px)) * 255;
 
-		const uint4 newpx = convert_uint4(n_px);
+		uint4 newpx = convert_uint4(n_px);
 		newpx.w = alpha;
 		
 		write_imageui(output, coords, newpx);
@@ -520,4 +483,29 @@ void kernel color_regions(constant uchar4 * restrict region_colors,
 		}
 		else output[gi] = convert_uchar4(px);
 	}
+}
+
+void kernel convolution(global uchar4 * restrict output, read_only image2d_t input, constant float * kernel_matrix, const int kwidth, const int kheight){
+	const int2 px_coords = (int2)(get_global_id(0),get_global_id(1));
+	const int2 dim = get_image_dim(input);
+	
+	if (px_coords.x < dim.x && px_coords.y < dim.y) {
+		float4 conv_fpx = (float4)(0);
+		float4 curr_fpx;
+		uint4 curr_px;
+		int2 curr_coords;
+		uchar px_alpha = (uchar)(read_imageui(input, sampler, curr_coords).w);
+		for(int i=0; i<kwidth; ++i){
+			for(int j=0; j<kheight; ++j){
+				curr_coords = px_coords+(int2)(i,j)-(int2)(kwidth>>1,kheight>>1);
+				curr_px = read_imageui(input, sampler, curr_coords);
+				curr_fpx = convert_float4(curr_px);
+				conv_fpx += curr_fpx * kernel_matrix[j*kheight+i];
+			}
+		}
+		uchar4 result_px = convert_uchar4(conv_fpx);
+		result_px.w = px_alpha;
+		output[global_index(px_coords, dim.x)] = result_px;
+	}
+
 }
