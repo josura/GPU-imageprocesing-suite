@@ -7,9 +7,15 @@ To build this project for opencl the following dependencies must be satisfied:
 > - Make
 > - gcc 
 
-## Requirements (CUDA)
+## Requirements (CUDA, not implemented yet)
 To build this project for opencl the following dependencied must be satisfied:
 > - CUDA(with a supporting GPU of course)
 > - OpenCV (for image loading and manipulation)
 > - Cmake
 > - Make
+
+## Requirements (GUI)
+To build the GUI QT5 needs to be installed and working.
+
+#Usage
+//TODO script
