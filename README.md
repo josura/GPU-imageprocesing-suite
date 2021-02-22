@@ -17,5 +17,5 @@ To build this project for opencl the following dependencied must be satisfied:
 ## Requirements (GUI)
 To build the GUI QT5 needs to be installed and working.
 
-#Usage
+# Usage
 //TODO script
