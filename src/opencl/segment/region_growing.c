@@ -336,6 +336,7 @@ int main(int argc, char ** args){
 	}
 	const double runtime_color_regions_ms = runtime_ms(color_regions_evt);
 	const double runtime_map_ms = runtime_ms(map_img_evt);
+	const double total_runtime_ms = runtime_RGBtoLAB_ms+runtime_region_growing_ms+runtime_color_regions_ms+runtime_map_ms;
 
 	const double RGBtoLAB_bw_gbs = dstdata_size/1.0e6/runtime_RGBtoLAB_ms;
 	const double region_growing_bw_gbs = dstdata_size/1.0e6/runtime_region_growing_ms;
@@ -350,6 +351,7 @@ int main(int argc, char ** args){
 		height, width, runtime_color_regions_ms, color_regions_bw_gbs, height*width/1.0e6/runtime_color_regions_ms);
 	printf("map img: %dx%d int in %gms: %g GB/s %g GE/s\n",
 		dstheight, dstwidth, runtime_map_ms, map_bw_gbs, dstheight*dstwidth/1.0e6/runtime_map_ms);
+	printf("Total runtime: %g ms\n", total_runtime_ms);
 
 	char outputImage[128];
 	sprintf(outputImage,"%s",args[3]);

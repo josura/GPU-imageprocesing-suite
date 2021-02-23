@@ -485,27 +485,146 @@ void kernel color_regions(constant uchar4 * restrict region_colors,
 	}
 }
 
+inline float4 convolution_step(read_only image2d_t input, const int2 px_coords, constant float * kernel_matrix, const int kwidth, const int kheight){
+	float4 conv_fpx = (float4)(0);
+	float4 curr_fpx;
+	uint4 curr_px;
+	int2 curr_coords;
+	for(int i=0; i<kwidth; ++i){
+		for(int j=0; j<kheight; ++j){
+			curr_coords = px_coords+(int2)(i,j)-(int2)(kwidth>>1,kheight>>1);
+			curr_px = read_imageui(input, sampler, curr_coords);
+			curr_fpx = convert_float4(curr_px);
+			conv_fpx += curr_fpx * kernel_matrix[j*kheight+i];
+		}
+	}
+	return conv_fpx;
+}
+
+//Convolution with transposed kernel for Canny
+inline float4 convolution_step_transposed(read_only image2d_t input, const int2 px_coords, constant float * kernel_matrix, const int kwidth, const int kheight){
+	float4 conv_fpx = (float4)(0);
+	float4 curr_fpx;
+	uint4 curr_px;
+	int2 curr_coords;
+	for(int i=0; i<kwidth; ++i){
+		for(int j=0; j<kheight; ++j){
+			curr_coords = px_coords+(int2)(i,j)-(int2)(kwidth>>1,kheight>>1);
+			curr_px = read_imageui(input, sampler, curr_coords);
+			curr_fpx = convert_float4(curr_px);
+			conv_fpx += curr_fpx * kernel_matrix[i*kwidth+j];
+		}
+	}
+	return conv_fpx;
+}
+
 void kernel convolution(global uchar4 * restrict output, read_only image2d_t input, constant float * kernel_matrix, const int kwidth, const int kheight){
 	const int2 px_coords = (int2)(get_global_id(0),get_global_id(1));
 	const int2 dim = get_image_dim(input);
 	
 	if (px_coords.x < dim.x && px_coords.y < dim.y) {
-		float4 conv_fpx = (float4)(0);
-		float4 curr_fpx;
-		uint4 curr_px;
-		int2 curr_coords;
-		uchar px_alpha = (uchar)(read_imageui(input, sampler, curr_coords).w);
-		for(int i=0; i<kwidth; ++i){
-			for(int j=0; j<kheight; ++j){
-				curr_coords = px_coords+(int2)(i,j)-(int2)(kwidth>>1,kheight>>1);
-				curr_px = read_imageui(input, sampler, curr_coords);
-				curr_fpx = convert_float4(curr_px);
-				conv_fpx += curr_fpx * kernel_matrix[j*kheight+i];
-			}
-		}
-		uchar4 result_px = convert_uchar4(conv_fpx);
+		const uchar px_alpha = (uchar)(read_imageui(input, sampler, px_coords).w);
+		uchar4 result_px = convert_uchar4(convolution_step(input, px_coords, kernel_matrix, kwidth, kheight));
 		result_px.w = px_alpha;
 		output[global_index(px_coords, dim.x)] = result_px;
 	}
 
+}
+
+void kernel drog_convolution(write_only image2d_t magnitudes, global int * restrict angles, read_only image2d_t input, constant float * kernel_matrix, const int kwidth, const int kheight){
+	const int2 px_coords = (int2)(get_global_id(0),get_global_id(1));
+	const int2 dim = get_image_dim(input);
+	
+	if (px_coords.x < dim.x && px_coords.y < dim.y) {
+		const uint px_alpha = read_imageui(input, sampler, px_coords).w;
+		const float4 result_x_px = convolution_step(input, px_coords, kernel_matrix, kwidth, kheight);
+		const float4 result_y_px = convolution_step_transposed(input, px_coords, kernel_matrix, kwidth, kheight);
+		//Compute potential edge angle
+		float px_angle = atan2(result_x_px.x,result_y_px.x);
+		//Shift angle of 2npi if negative
+		if (px_angle < 0) px_angle = fmod((px_angle + 2*M_PI),(2*M_PI));
+		//Compute and write gradient magnitude
+		const uint magnitude = (uint)(hypot(result_x_px.x,result_y_px.x));
+		const uint4 result_px = (uint4)(magnitude, magnitude, magnitude, px_alpha);
+		write_imageui(magnitudes, px_coords, result_px);
+		//Convert to degrees and round up angles to either 0, 45, 90 or 135 degrees
+		const int angle_degree = (int)((degrees(px_angle * (M_PI/8) + M_PI/8-0.0001) / 45) * 45) % 180;
+		angles[global_index(px_coords, dim.x)] = angle_degree;
+	}
+
+}
+
+void kernel non_maxima_suppression(read_only image2d_t magnitudes, write_only image2d_t supp_magnitudes, global int * restrict angles){
+	const int2 px_coords = (int2)(get_global_id(0),get_global_id(1));
+	const int2 dim = get_image_dim(magnitudes);
+	
+	if (px_coords.x < dim.x && px_coords.y < dim.y) {
+		const int gi = global_index(px_coords, dim.x);
+		const int px_angle = angles[gi];
+		const uint4 px_magnitude = read_imageui(magnitudes, sampler, px_coords);
+		uint neigh1_px, neigh2_px;
+		int2 neigh_shift;
+		switch(px_angle){
+			case 0:
+				//0 degrees: the edge is perfectly vertical, check left and right neighbors
+				neigh_shift = (int2)(0,1);
+				break;
+			case 45:
+				//45 degrees: the edge is diagonal NW/SE, check NE/SW neighbors
+				neigh_shift = (int2)(1,-1);
+				break;
+			case 90:
+				//90 degrees: edge is horizontal, check top and bottom neighbors
+				neigh_shift = (int2)(1,0);
+				break;
+			case 135:
+				//135 degrees: the edge is diagonal NE/SW, check NW/SE neighbors
+				neigh_shift = (int2)(1,1);
+				break;
+			default:
+				neigh_shift = (int2)(0,0);
+				break;
+		}
+		neigh1_px = read_imageui(magnitudes, sampler, px_coords+neigh_shift).x;
+		neigh2_px = read_imageui(magnitudes, sampler, px_coords-neigh_shift).x;
+		//If magnitude is less than neighbors magnitudes (not a local maxima), suppress edge
+		if(px_magnitude.x < neigh1_px || px_magnitude.x < neigh2_px){
+			write_imageui(supp_magnitudes, px_coords, (uint4)(0,0,0,px_magnitude.w));
+		}
+		else write_imageui(supp_magnitudes, px_coords, px_magnitude);
+	}
+
+}
+
+void kernel hysteresis(global uchar4 * restrict output,
+	read_only image2d_t input,
+	uint low_threshold, uint high_threshold){
+
+	const int2 px_coords = (int2)(get_global_id(0),get_global_id(1));
+	const int2 dim = get_image_dim(input);
+
+	if (px_coords.x < dim.x && px_coords.y < dim.y) {
+
+		const int gi = global_index(px_coords, dim.x);
+
+		const uint4 magnitude = read_imageui(input, sampler, px_coords);
+		if(magnitude.x >= high_threshold) output[gi] = (uchar4)(255,255,255,magnitude.w);
+		else if(magnitude.x <= low_threshold) output[gi] = (uchar4)(0,0,0,magnitude.w);
+		else{
+			//Weak edge, check 8-connected neighbors
+			const int2 neigh_map[8] = {(int2)(-1,-1),(int2)(-1,0), (int2)(-1,1), (int2)(0,-1), (int2)(0,1), (int2)(1,-1), (int2)(1,0), (int2)(1,1)};
+			uint neighbor_magnitude;
+			#pragma unroll
+			for(int i=0; i<8; ++i){
+				neighbor_magnitude = read_imageui(input, sampler, px_coords+neigh_map[i]).x;
+				if(neighbor_magnitude >= high_threshold){
+					//Neighbor is a strong edge, connect and exit
+					output[gi] = (uchar4)(255,255,255,magnitude.w);
+					break;
+				}
+			}
+			//No strong edges in the vicinity, turn black
+			output[gi] = (uchar4)(0,0,0,magnitude.w);
+		}
+	}
 }

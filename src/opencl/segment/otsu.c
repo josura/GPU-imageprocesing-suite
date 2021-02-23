@@ -238,7 +238,7 @@ cl_event binarization(cl_kernel binarization_k, cl_command_queue que,
 void usage(int argc){
 	if(argc<3){
 		fprintf(stderr,"Usage: ./otsu <image.png> <output.png>\n ");
-		fprintf(stderr,"The image can have 1 to 4 channels (R,G,B,transparency)\n");
+		fprintf(stderr,"The image needs to have 4 channels (R,G,B,transparency)\n");
 		fprintf(stderr,"It will be converted to grayscale with 1 channel\n");
 		fprintf(stderr,"output is the name of the output image\n");
 
@@ -481,6 +481,11 @@ int main(int argc, char ** args){
 
 	clReleaseMemObject(d_output);
 	clReleaseMemObject(d_input);
+	clReleaseMemObject(d_histogram);
+	clReleaseMemObject(d_max_k);
+	clReleaseMemObject(d_max_wg_k);
+	clReleaseMemObject(d_probs_means);
+	clReleaseMemObject(d_tails);
 	clReleaseKernel(histogram_k);
 	clReleaseKernel(otsu_k);
 	clReleaseKernel(binarization_k);

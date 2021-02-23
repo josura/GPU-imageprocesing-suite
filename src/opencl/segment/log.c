@@ -174,7 +174,7 @@ int main(int argc, char ** args){
 		&err);
 	ocl_check(err, "create buffer d_output");
 
-	cl_event matrixgen_evt, log_evt, map_evt;
+	cl_event log_evt, map_evt;
 
 	log_evt = log_convolution(log_k, que, d_output, d_input, height, width, d_kernel_matrix, kwidth, kheight);
 
@@ -186,6 +186,7 @@ int main(int argc, char ** args){
 
 	const double runtime_log_ms = runtime_ms(log_evt);
 	const double runtime_map_ms = runtime_ms(map_evt);
+	const double total_runtime_ms = runtime_log_ms+runtime_map_ms;
 
 	const double log_bw_gbs = dstdata_size/1.0e6/runtime_log_ms;
 	const double map_bw_gbs = dstdata_size/1.0e6/runtime_map_ms;
@@ -194,6 +195,7 @@ int main(int argc, char ** args){
 		height, width, runtime_log_ms, log_bw_gbs, height*width/1.0e6/runtime_log_ms);
 	printf("map: %dx%d int in %gms: %g GB/s %g GE/s\n",
 		dstheight, dstwidth, runtime_map_ms, map_bw_gbs, dstheight*dstwidth/1.0e6/runtime_map_ms);
+	printf("Total runtime: %g ms\n", total_runtime_ms);
 
 	char outputImage[128];
 	sprintf(outputImage,"%s",args[2]);
