@@ -67,7 +67,7 @@ void kernel random_dithering(global uchar4 * restrict d_output,
 		const float4 newpx = convert_float4(px)+dither;
 
 		//Quantize to num_levels
-		const uchar4 qtpx = convert_uchar4(floor((newpx/256)*num_levels)*p);
+		uchar4 qtpx = convert_uchar4(floor((newpx/256)*num_levels)*p);
 
 		qtpx.w = alpha_val;
 
@@ -116,7 +116,7 @@ void kernel ordered_dithering(global uchar4 * restrict d_output,
 		const float4 newpx = convert_float4(px)+dither*p;
 
 		//Quantize to num_levels
-		const uchar4 qtpx = convert_uchar4(floor((newpx/256)*num_levels)*p);
+		uchar4 qtpx = convert_uchar4(floor((newpx/256)*num_levels)*p);
 
 		qtpx.w = alpha_val;
 

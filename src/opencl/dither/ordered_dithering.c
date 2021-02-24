@@ -4,6 +4,7 @@
 #include <limits.h>
 #include <unistd.h>
 #include <math.h>
+#include <ctype.h>
 
 #define STB_IMAGE_IMPLEMENTATION
 #include"../../../stb/stb_image.h" 
