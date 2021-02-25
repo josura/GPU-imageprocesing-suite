@@ -18,4 +18,9 @@ To build this project for opencl the following dependencied must be satisfied:
 To build the GUI QT5 needs to be installed and working.
 
 # Usage
-//TODO script
+To download the project and run GUI application do the following steps
+
+1. git clone https://github.com/josura/GPU-imageprocesing-suite.git
+2. chmod u+x buildall.sh
+3. ./buildall.sh
+4. ./run.sh
