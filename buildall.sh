@@ -5,7 +5,7 @@ cd ../../../
 cd src/opencl/segment/ && make
 cd ../../../
 
-cd GUI/functioningGUI && qmake
+cd GUI/functioningGUI && make -j4
 cd ../../
 
-ln -s GUI/build-functioningGUI-Desktop-Debug/functioningGUI application
+ln -s GUI/functioningGUI/functioningGUI application
