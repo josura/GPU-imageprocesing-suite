@@ -1,3 +1,5 @@
+git submodule update
+
 cd src/opencl/morph/ && make
 cd ../../../
 cd src/opencl/dither/ && make
