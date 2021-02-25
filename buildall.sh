@@ -10,4 +10,5 @@ cd ../../../
 cd GUI/functioningGUI && qmake &&make -j4
 cd ../../
 
+#does not work with symbolic link
 #ln -s GUI/functioningGUI/functioningGUI application
