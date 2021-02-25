@@ -1,4 +1,4 @@
-git submodule update
+git submodule init && git submodule update
 
 cd src/opencl/morph/ && make
 cd ../../../
