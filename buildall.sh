@@ -10,4 +10,4 @@ cd ../../../
 cd GUI/functioningGUI && qmake &&make -j4
 cd ../../
 
-ln -s GUI/functioningGUI/functioningGUI application
+#ln -s GUI/functioningGUI/functioningGUI application
