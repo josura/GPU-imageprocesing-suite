@@ -21,6 +21,6 @@ To build the GUI QT5 needs to be installed and working.
 To download the project and run GUI application do the following steps
 
 1. git clone https://github.com/josura/GPU-imageprocesing-suite.git
-2. chmod u+x buildall.sh
+2. chmod u+x buildall.sh run.sh
 3. ./buildall.sh
 4. ./run.sh
