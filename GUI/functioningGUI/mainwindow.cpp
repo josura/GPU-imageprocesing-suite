@@ -10,7 +10,7 @@ MainWindow::MainWindow(QWidget *parent)
     QStringList operations,operationsDither,operationsSegmentation;
     operations<<"erosion"<<"dilation"<<"gradient"<<"opening"<<"closing"<<"tophat"<<"bottomhat"<<"hitormiss"<<"geodesicerosion"<<"geodesicdilation";
     operationsDither<<"random"<<"ordered";
-    operationsSegmentation<<"otsu"<<"regionGrowing";
+    operationsSegmentation<<"otsu"<<"regionGrowing"<<"LoG"<<"Canny";
     ui->comboBox->addItems(operations);
     ui->comboBoxDither->addItems(operationsDither);//->additems(operations);
     ui->comboBox_2->addItems(operationsSegmentation);
@@ -300,9 +300,11 @@ void MainWindow::on_pushButton_5_clicked()
         QFileInfo workdir("../../src/opencl/segment/");
         QFileInfo procdirOtsu("../../src/opencl/segment/otsu");
         QFileInfo procdirRegion("../../src/opencl/segment/region_growing");
+        QFileInfo procdirCanny("../../src/opencl/segment/canny");
+        QFileInfo procdirLog("../../src/opencl/segment/log");
 
         QString se = procdirOtsu.absoluteFilePath();
-        if(operation=="regionGrowing"){
+        if(operation=="regionGrowing" ){
             arguments << regions <<"/tmp/segmentImage.png";
             if(threshold!=""){
                 if(!isNumber(threshold)){
@@ -313,6 +315,8 @@ void MainWindow::on_pushButton_5_clicked()
             }
             se = procdirRegion.absoluteFilePath();
         } else{
+            if(operation=="Canny")se = procdirCanny.absoluteFilePath();
+            if(operation=="LoG")se = procdirLog.absoluteFilePath();
             arguments << "/tmp/segmentImage.png";
         }
         QString wd = workdir.absolutePath();
