@@ -49,6 +49,10 @@ private slots:
 
     void on_pushButton_8_clicked();
 
+    void on_comboBox_2_activated(const QString &arg1);
+
+    void on_comboBox_activated(const QString &arg1);
+
 private:
     Ui::MainWindow *ui;
     SecWindowImage * imageDialog;

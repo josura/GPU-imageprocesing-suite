@@ -277,6 +277,7 @@ void MainWindow::on_pushButton_5_clicked()
     if(changedImage)started=false;
     QString regions = ui->lineEdit_9->text();
     QString threshold = ui->lineEdit_10->text();
+    QString otherParam = ui->lineEdit_11->text();
     bool valid=true;
 
 
@@ -311,13 +312,19 @@ void MainWindow::on_pushButton_5_clicked()
                     QMessageBox::critical(this," wrong format"," the distance threshold "+threshold+" is not a number");
                     return;
                 }
-                arguments<<threshold;
+                arguments<<threshold<<otherParam;
             }
             se = procdirRegion.absoluteFilePath();
         } else{
-            if(operation=="Canny")se = procdirCanny.absoluteFilePath();
-            if(operation=="LoG")se = procdirLog.absoluteFilePath();
             arguments << "/tmp/segmentImage.png";
+            if(operation=="Canny"){
+                arguments<<regions<<threshold;
+                se = procdirCanny.absoluteFilePath();
+            }
+            if(operation=="LoG"){
+                arguments<<regions;
+                se = procdirLog.absoluteFilePath();
+            }
         }
         QString wd = workdir.absolutePath();
         dithering->setWorkingDirectory(wd);
@@ -360,5 +367,56 @@ void MainWindow::on_pushButton_8_clicked()
         } else {
             procImage.save(file_name);
         }
+    }
+}
+
+void MainWindow::on_comboBox_2_activated(const QString &arg1)
+{
+    if(arg1=="LoG"){
+        ui->label_7->setText("gamma");
+        ui->label_7->setVisible(true);
+        ui->label_8->setText("unused");
+        ui->label_8->setVisible(false);
+        ui->lineEdit_10->setVisible(false);
+        ui->lineEdit_8->setVisible(true);
+        ui->label_9->setVisible(false);
+        ui->lineEdit_11->setVisible(false);
+    }else if (arg1=="Canny"){//ui->comboBox_2->currentText()=="LoG" || ui->comboBox_2->currentText()=="Canny"){
+            ui->label_7->setText("lowerThreshold");
+            ui->label_7->setVisible(true);
+            ui->label_8->setText("higherThreshold");
+            ui->label_8->setVisible(true);
+            ui->lineEdit_10->setVisible(true);
+            ui->lineEdit_8->setVisible(true);
+            ui->label_9->setVisible(false);
+            ui->lineEdit_11->setVisible(false);
+    } else if(arg1=="regionGrowing"){
+        ui->label_7->setText("threshold");
+        ui->label_7->setVisible(true);
+        ui->label_8->setText("coordinate x");
+        ui->label_9->setText("coordinate y");
+        ui->label_8->setVisible(true);
+        ui->lineEdit_8->setVisible(true);
+        ui->lineEdit_10->setVisible(true);
+        ui->label_9->setVisible(true);
+        ui->lineEdit_11->setVisible(true);
+    }else{
+        //ui->label_7->setText("#regions");
+        ui->label_7->setVisible(false);
+        ui->label_8->setText("threshold");
+        ui->label_8->setVisible(false);
+        ui->lineEdit_8->setVisible(false);
+        ui->lineEdit_10->setVisible(false);
+        ui->label_9->setVisible(false);
+        ui->lineEdit_11->setVisible(false);
+    }
+}
+
+void MainWindow::on_comboBox_activated(const QString &arg1)
+{
+    if(arg1=="geodesicerosion" || arg1=="geodesicdilation"){
+        ui->geodesicLayout->setVisible(true);
+    } else{
+        ui->geodesicLayout->setVisible(false);
     }
 }

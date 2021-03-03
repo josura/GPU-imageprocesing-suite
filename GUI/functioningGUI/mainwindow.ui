@@ -63,28 +63,30 @@
          </layout>
         </item>
         <item>
-         <layout class="QHBoxLayout" name="horizontalLayout_6">
-          <item>
-           <widget class="QLabel" name="label_4">
-            <property name="text">
-             <string>Mask for geodesic morphology</string>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QLineEdit" name="lineEdit_6"/>
-          </item>
-          <item>
-           <widget class="QLabel" name="label_5">
-            <property name="text">
-             <string>#iterations</string>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QLineEdit" name="lineEdit_7"/>
-          </item>
-         </layout>
+         <widget class="QWidget" name="geodesicLayout" native="true">
+          <layout class="QHBoxLayout" name="horizontalLayout_6">
+           <item>
+            <widget class="QLabel" name="label_4">
+             <property name="text">
+              <string>Mask for geodesic morphology</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QLineEdit" name="lineEdit_6"/>
+           </item>
+           <item>
+            <widget class="QLabel" name="label_5">
+             <property name="text">
+              <string>#iterations</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QLineEdit" name="lineEdit_7"/>
+           </item>
+          </layout>
+         </widget>
         </item>
         <item>
          <layout class="QHBoxLayout" name="ImagesLayout">
@@ -98,8 +100,8 @@
               <rect>
                <x>0</x>
                <y>0</y>
-               <width>595</width>
-               <height>371</height>
+               <width>593</width>
+               <height>389</height>
               </rect>
              </property>
              <widget class="QLabel" name="Image">
@@ -128,8 +130,8 @@
               <rect>
                <x>0</x>
                <y>0</y>
-               <width>595</width>
-               <height>371</height>
+               <width>592</width>
+               <height>389</height>
               </rect>
              </property>
              <widget class="QLabel" name="processedImage">
@@ -231,8 +233,8 @@
               <rect>
                <x>0</x>
                <y>0</y>
-               <width>595</width>
-               <height>409</height>
+               <width>593</width>
+               <height>425</height>
               </rect>
              </property>
              <widget class="QLabel" name="ditheringImage">
@@ -261,8 +263,8 @@
               <rect>
                <x>0</x>
                <y>0</y>
-               <width>595</width>
-               <height>409</height>
+               <width>592</width>
+               <height>425</height>
               </rect>
              </property>
              <widget class="QLabel" name="ditheringImageProcessed">
@@ -344,6 +346,16 @@
            <widget class="QLineEdit" name="lineEdit_10"/>
           </item>
           <item>
+           <widget class="QLabel" name="label_9">
+            <property name="text">
+             <string>coordinate y</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLineEdit" name="lineEdit_11"/>
+          </item>
+          <item>
            <widget class="QPushButton" name="pushButton_5">
             <property name="text">
              <string>Process</string>
@@ -364,8 +376,8 @@
               <rect>
                <x>0</x>
                <y>0</y>
-               <width>595</width>
-               <height>409</height>
+               <width>593</width>
+               <height>425</height>
               </rect>
              </property>
              <widget class="QLabel" name="segmentImage">
@@ -394,8 +406,8 @@
               <rect>
                <x>0</x>
                <y>0</y>
-               <width>595</width>
-               <height>409</height>
+               <width>592</width>
+               <height>425</height>
               </rect>
              </property>
              <widget class="QLabel" name="segmentProcessedImage">
@@ -446,7 +458,7 @@
      <x>0</x>
      <y>0</y>
      <width>1251</width>
-     <height>26</height>
+     <height>25</height>
     </rect>
    </property>
   </widget>
