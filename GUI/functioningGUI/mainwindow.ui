@@ -305,7 +305,7 @@
       </widget>
       <widget class="QWidget" name="tab_3">
        <attribute name="title">
-        <string>Segmentation</string>
+        <string>Segmentation and Edge Detection</string>
        </attribute>
        <layout class="QVBoxLayout" name="verticalLayout_4">
         <item>
