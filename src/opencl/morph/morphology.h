@@ -1666,7 +1666,7 @@ unsigned char* fullGeodesicErosion(unsigned char* image,unsigned char* mask,unsi
 
 
 
-		maximum_evt = difference(imagemaximum_k,que, d_output, d_tmp,d_input, imageheight, imagewidth, imageheight,imagewidth);
+		maximum_evt = difference(imagemaximum_k,que, d_output, d_tmp,d_mask, imageheight, imagewidth, imageheight,imagewidth);
 
 		outimg = clEnqueueMapBuffer(que, d_output, CL_FALSE,
 			CL_MAP_READ,
@@ -1854,7 +1854,7 @@ unsigned char* fullGeodesicDilation(unsigned char* image,unsigned char* mask,uns
 
 
 
-		minimum_evt = difference(imageminimum_k,que, d_output, d_tmp,d_input, imageheight, imagewidth, imageheight,imagewidth);
+		minimum_evt = difference(imageminimum_k,que, d_output, d_tmp,d_mask, imageheight, imagewidth, imageheight,imagewidth);
 
 		outimg = clEnqueueMapBuffer(que, d_output, CL_FALSE,
 			CL_MAP_READ,
