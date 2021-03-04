@@ -39,7 +39,7 @@ short isNumber(const char* string){
 }
 
 cl_event dithering(cl_kernel dithering_k, cl_command_queue que,
-	cl_mem d_output, cl_mem d_input, cl_uint4 seeds,
+	cl_mem d_output, cl_mem d_input, cl_uint8 seeds,
 	cl_int nrows, cl_int ncols, cl_uchar num_levels)
 {
 	const size_t gws[] = { round_mul_up(ncols, gws_align_dithering), nrows };
@@ -165,11 +165,18 @@ int main(int argc, char ** args){
 		img,
 		&err);
 	ocl_check(err, "create image d_input");
-
+	srand(time(0));
 	//seeds for the edited MWC64X
-	cl_uint4 seeds = {.x = time(0) & 134217727, .y = (getpid() * getpid() * getpid()) & 134217727, .z = (clock()*clock()) & 134217727, .w = rdtsc() & 134217727};
+	cl_uint8 seeds = {.s0 = time(0) & 134217727, 
+	.s1 = (getpid() * getpid() * getpid()) & 134217727, 
+	.s2 = (clock()*clock()) & 134217727, 
+	.s3 = rdtsc() & 134217727,
+	.s4 = (cl_uint)rand(),
+	.s5 = (cl_uint)rand(),
+	.s6 = (cl_uint)rand(),
+	.s7 = (cl_uint)rand()};
 
-	printf("Seeds: %d, %d, %d, %d\n", seeds.x, seeds.y, seeds.z, seeds.w);
+	printf("Seeds: %d, %d, %d, %d, %d, %d, %d, %d\n", seeds.s0, seeds.s1, seeds.s2, seeds.s3, seeds.s4, seeds.s5, seeds.s6, seeds.s7);
 
 	d_output = clCreateBuffer(ctx,
 	CL_MEM_WRITE_ONLY | CL_MEM_HOST_READ_ONLY | CL_MEM_ALLOC_HOST_PTR,

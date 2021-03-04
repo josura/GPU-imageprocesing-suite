@@ -14,6 +14,7 @@ inline float4 MWC64XVEC4(mwc64xvec4_state_t *s, float leftLimit, float rightLimi
 {
     enum{ MWC64XVEC4_A = 4294883355U };
     uint4 x=s->x, c=s->c;
+	const int gi = get_global_id(1)*get_global_size(0)+get_global_id(0);
     uint4 res=x^c;                     // Calculate the result
     uint4 hi=mul_hi(x,MWC64XVEC4_A);              // Step the RNG
     x=x*MWC64XVEC4_A+c;
@@ -24,7 +25,7 @@ inline float4 MWC64XVEC4(mwc64xvec4_state_t *s, float leftLimit, float rightLimi
 }
 
 //Another simple RNG (often used in hashing) to randomize local id or global id
-inline uint randomizeId(uint id)
+inline uint randomizeId(int id)
 {
         id = (id ^ 61) ^ (id >> 16);
         id *= 9;
@@ -35,14 +36,14 @@ inline uint randomizeId(uint id)
  }
 
 //Mix seeds with randomized global id
-inline void MWC64XVEC4_Seeding(mwc64xvec4_state_t *s, int gi, uint4 seeds){
-	s->x = (uint4)((seeds.x) ^ randomizeId(gi), (seeds.y*seeds.z) ^ randomizeId(gi), (seeds.y*(seeds.w & 131071)) ^ randomizeId(gi), ((seeds.x & 131071)*seeds.y) ^ randomizeId(gi));
-	s->c = (uint4)((seeds.w) ^ randomizeId(gi), (seeds.w ^ seeds.x) ^ randomizeId(gi), (seeds.z*seeds.x) ^ randomizeId(gi), (seeds.z*(seeds.w & 131071)) ^ randomizeId(gi));
+inline void MWC64XVEC4_Seeding(mwc64xvec4_state_t *s, int gi, uint8 seeds){
+	s->x = (uint4)(seeds.lo * randomizeId(gi));
+	s->c = (uint4)(seeds.hi * randomizeId(gi));
 }
 
 void kernel random_dithering(global uchar4 * restrict d_output,
 	read_only image2d_t d_input,
-	uchar num_levels, uint4 seeds)
+	uchar num_levels, uint8 seeds)
 {
 	const int i = get_global_id(0);
 	const int j = get_global_id(1);
@@ -59,6 +60,7 @@ void kernel random_dithering(global uchar4 * restrict d_output,
 		const float p_half = p/2;
 
 		const float4 dither = MWC64XVEC4(&rng, -p_half, p_half);
+		if(gi<10) printf("gi %d, dither: %f %f %f %f\n", gi, dither.x, dither.y, dither.z, dither.w);
 		const uint4 px = read_imageui(d_input, sampler, (int2)(i,j));
 
 		//Preserve alpha
