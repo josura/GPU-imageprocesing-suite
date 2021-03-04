@@ -414,9 +414,60 @@ inline float deltaE(uint3 labA_u, uint3 labB_u){
 	else return sqrt(norm);
 }
 
+//Region growing kernel for a single region
+void kernel region_growing_single_region(global uchar * restrict explore_labels,
+	const float dist_threshold, global int * unfinished_flag, read_only image2d_t input){
+
+	const int2 px_coords = (int2)(get_global_id(0),get_global_id(1));
+	const int2 dim = get_image_dim(input);
+
+	if (px_coords.x < dim.x && px_coords.y < dim.y) {
+
+		const int gi = global_index(px_coords, dim.x);
+		const uchar px_explore = explore_labels[gi];
+
+		if(px_explore==1){
+			*unfinished_flag = 1;
+			const uint4 px = read_imageui(input, sampler, px_coords);
+			int2 d[4];
+			d[0] = (int2)(-1,0);
+			d[1] = (int2)(1,0);
+			d[2] = (int2)(0,1);
+			d[3] = (int2)(0,-1);
+
+			int2 neigh_coords;
+			uint4 neigh_px;
+			int neigh_region;
+			uchar neigh_explore;
+
+			#pragma unroll
+			for(int n=0; n<4; ++n){
+				neigh_coords = px_coords + d[n];
+				
+				if(!inside(neigh_coords, dim)){
+					continue;
+				}
+
+				neigh_px = read_imageui(input, sampler, neigh_coords);
+
+				const int ni = global_index(neigh_coords, dim.x);
+				neigh_explore = explore_labels[ni];
+				
+				//Check if neighbor is close enough and is not already in the region
+				if(neigh_explore==0 && deltaE(px.s012, neigh_px.s012)<dist_threshold){
+					explore_labels[ni] = 1;
+				}
+			}
+			//Current pixel has explored all its neighbors
+			explore_labels[gi] = 2;
+		}
+	}
+}
+
+//Region growing kernel for multiple regions, with labels for each region
 void kernel region_growing(global int * restrict region_labels,
 	global uchar * restrict explore_labels, const int curr_region,
-	const uint dist_threshold, global int * unfinished_flag, read_only image2d_t input){
+	const float dist_threshold, global int * unfinished_flag, read_only image2d_t input){
 
 	const int2 px_coords = (int2)(get_global_id(0),get_global_id(1));
 	const int2 dim = get_image_dim(input);
@@ -463,6 +514,25 @@ void kernel region_growing(global int * restrict region_labels,
 			//Current pixel has explored all its neighbors
 			explore_labels[gi] = 0;
 		}
+	}
+}
+
+//Use the seed pixel color to color the corresponding region
+void kernel color_single_region(const uchar4 region_color, 
+	global uchar * restrict explore_labels,
+	read_only image2d_t input, global uchar4 * restrict output){
+
+	const int2 px_coords = (int2)(get_global_id(0),get_global_id(1));
+	const int2 dim = get_image_dim(input);
+
+	if (px_coords.x < dim.x && px_coords.y < dim.y) {
+		const uint4 px = read_imageui(input, sampler, px_coords);
+		const int gi = global_index(px_coords, dim.x);
+		const int label = explore_labels[gi];
+		if(label > 0){
+			output[gi] = region_color;
+		}
+		else output[gi] = convert_uchar4(px);
 	}
 }
 
