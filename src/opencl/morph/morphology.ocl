@@ -27,7 +27,8 @@ void kernel dilationImage(global uchar4 * restrict d_output,
 			//non so se fare prima righe o colonne, mi ricordo sia più veloce facendo le colonne
 			for(int j=0;j<dimStrel.y;j++){
 				const float2 strelcoords = (float2)(i,j);
-				const float2 finalcoords = coords - strelcoords-1;
+				const float2 finalcoords = coords - strelcoords;
+				if(c==200 && r==200){printf("strel coords");printf("  %2.2v2f ",strelcoords);printf("final coords");printf(" %2.2v2f\n",finalcoords);}
 				float4 pxtmp = read_imagef(d_input, sampler, finalcoords);
 				const float4 strelpx = read_imagef(strel, sampler, strelcoords);
 				pxtmp = min(pxtmp+strelpx,maxvalue);
@@ -62,7 +63,8 @@ void kernel erosionImage(global uchar4 * restrict d_output,
 			//non so se fare prima righe o colonne, mi ricordo sia più veloce facendo le colonne
 			for(int j=0;j<dimStrel.y;j++){
 				const float2 strelcoords = (float2)(i,j);
-				const float2 finalcoords = coords + strelcoords-1;
+				const float2 finalcoords = coords + strelcoords;
+				if(c==200 && r==200){printf("strel coords");printf("  %2.2v2f ",strelcoords);printf("final coords");printf(" %2.2v2f\n",finalcoords);}
 				float4 pxtmp = read_imagef(d_input, sampler, finalcoords);
 				const float4 strelpx = read_imagef(strel, sampler, strelcoords);
 				pxtmp = max(pxtmp-strelpx,minvalue);
@@ -97,7 +99,7 @@ void kernel erosionImageHM(global uchar4 * restrict d_output,
 			//non so se fare prima righe o colonne, mi ricordo sia più veloce facendo le colonne
 			for(int j=0;j<dimStrel.y;j++){
 				const float2 strelcoords = (float2)(i,j);
-				const float2 finalcoords = coords + strelcoords -1;
+				const float2 finalcoords = coords + strelcoords;
 				float4 pxtmp = read_imagef(d_input, sampler, finalcoords);
 				const float4 strelpx = read_imagef(strel, sampler, strelcoords);
 				pxtmp = max(pxtmp+strelpx,minvalue);
