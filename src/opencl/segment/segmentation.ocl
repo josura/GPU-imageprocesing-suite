@@ -690,7 +690,7 @@ void kernel hysteresis(global uchar4 * restrict output,
 				if(neighbor_magnitude >= high_threshold){
 					//Neighbor is a strong edge, connect and exit
 					output[gi] = (uchar4)(255,255,255,magnitude.w);
-					break;
+					return;
 				}
 			}
 			//No strong edges in the vicinity, turn black

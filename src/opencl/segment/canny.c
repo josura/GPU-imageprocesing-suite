@@ -145,7 +145,7 @@ void usage(int argc){
 		fprintf(stderr,"Usage: ./canny <image.png> <output.png> [sigma] [low_threshold] [high_threshold]\n ");
 		fprintf(stderr,"The image needs to have 4 channels (R,G,B,transparency)\n");
 		fprintf(stderr,"It will be converted to grayscale with 1 channel\n");
-		fprintf(stderr,"sigma is the standard deviation for the DroG kernel (default 2.5)\n");
+		fprintf(stderr,"sigma is the standard deviation for the DroG kernel (default 0.8)\n");
 		fprintf(stderr,"low_threshold and high_threshold are the two threshold for hysteresis\n");
 		fprintf(stderr,"output is the name of the output image\n");
 
@@ -183,8 +183,8 @@ unsigned char* RGBA2grayscale(unsigned char* inputRGB, int width, int height){
 int main(int argc, char ** args){
 	usage(argc);
 	cl_uint low_threshold = 20;
-	cl_uint high_threshold = 60;
-	float sigma = 2.5f;
+	cl_uint high_threshold = 50;
+	float sigma = 0.7;
 	if(argc>3){
 		sigma = atof(args[3]);
 	}
