@@ -28,6 +28,35 @@ short isNumber(const char* string){
 	return 1;
 }
 
+void computeDrogKernel(float * kernel_matrix, cl_int kwidth, cl_int kheight, float sigma){
+	float sum_k = 0;
+	float curr_elem;
+	for(int i=0; i<kheight; ++i){
+		for(int j=0; j<kwidth; ++j){
+			float x = j-kwidth/2;
+			float y = i-kheight/2;
+			curr_elem = -x/(sigma*sigma) * (exp(-(x*x+y*y)/(2*sigma*sigma)));
+			kernel_matrix[j*kheight+i] = curr_elem;
+		}
+	}
+	
+	for(int i=0; i<kwidth; ++i){
+		for(int j=0; j<kheight; ++j){
+			if(i != kwidth/2) kernel_matrix[j*kheight+i] /= 2;
+			//kernel_matrix[j*kheight+i] = kernel_matrix[j*kheight+i] - sum_k/(kwidth*kheight);
+		}
+	}
+}
+
+void print_matrix(float * matrix, int height, int width){
+	for(int i=0; i<height; ++i){
+		for(int j=0; j<width; ++j){
+			printf("%f ", matrix[i*width+j]);
+		}
+		printf("\n");
+	}
+}
+
 cl_event drog_convolution(cl_kernel drog_k, cl_command_queue que,
 	cl_mem d_magnitudes, cl_mem d_input, cl_mem d_angles,
 	cl_int nrows, cl_int ncols, cl_mem d_kernel_matrix, cl_int kwidth, cl_int kheight)
@@ -112,10 +141,11 @@ cl_event m_hysteresis(cl_kernel hysteresis_k, cl_command_queue que,
 }
 
 void usage(int argc){
-	if(argc<2){
-		fprintf(stderr,"Usage: ./canny <image.png> <output.png> [low_threshold] [high_threshold]\n ");
+	if(argc<3){
+		fprintf(stderr,"Usage: ./canny <image.png> <output.png> [sigma] [low_threshold] [high_threshold]\n ");
 		fprintf(stderr,"The image needs to have 4 channels (R,G,B,transparency)\n");
 		fprintf(stderr,"It will be converted to grayscale with 1 channel\n");
+		fprintf(stderr,"sigma is the standard deviation for the DroG kernel (default 2.5)\n");
 		fprintf(stderr,"low_threshold and high_threshold are the two threshold for hysteresis\n");
 		fprintf(stderr,"output is the name of the output image\n");
 
@@ -152,13 +182,17 @@ unsigned char* RGBA2grayscale(unsigned char* inputRGB, int width, int height){
 
 int main(int argc, char ** args){
 	usage(argc);
-	cl_uint low_threshold = 15;
-	cl_uint high_threshold = 40;
+	cl_uint low_threshold = 20;
+	cl_uint high_threshold = 60;
+	float sigma = 2.5f;
 	if(argc>3){
-		if(isNumber(args[3])) low_threshold = atoi(args[3]);
+		sigma = atof(args[3]);
 	}
 	if(argc>4){
-		if(isNumber(args[4])) high_threshold = atoi(args[4]);
+		if(isNumber(args[4])) low_threshold = atoi(args[4]);
+	}
+	if(argc>5){
+		if(isNumber(args[5])) high_threshold = atoi(args[5]);
 	}
 	int width,height,channels;
 	// caricamento immagine in memoria come array di unsigned char
@@ -238,11 +272,19 @@ int main(int argc, char ** args){
 	ocl_check(err, "create image d_supp_magnitudes");
 
 	//DroG matrix x direction
-	float kernel_matrix[] = {
+	/*float kernel_matrix[] = {
         0.1129f, 0.7733f, 0.1129f,
         0, 0, 0,
-		-0.1129f, -0.7733f, -0.1129f};
-	cl_int kwidth = 3, kheight = 3;
+		-0.1129f, -0.7733f, -0.1129f};*/
+	float kernel_matrix[] = {
+        0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0,
+		0, 0, 0, 0, 0,
+		0, 0, 0, 0, 0,
+		0, 0, 0, 0, 0};
+	cl_int kwidth = 5, kheight = 5;
+	computeDrogKernel(kernel_matrix, kwidth, kheight, sigma);
+	print_matrix(kernel_matrix, kheight, kwidth);
 
 	d_kernel_matrix = clCreateBuffer(ctx,
 	CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,

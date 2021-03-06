@@ -28,6 +28,63 @@ short isNumber(const char* string){
 	return 1;
 }
 
+/*
+float laplacianOfGaussian(float x, float y, float sigma){
+	float num = ((x*x+y*y)-2*(sigma*sigma));
+	float denom = 2*M_PI*(pow(sigma, 6));
+	float expon = exp(-(x*x+y*y)/(2*(sigma*sigma)));
+	return num*expon/denom;
+}
+
+
+void computeLogKernel(float * kernel_matrix, cl_int kwidth, cl_int kheight, float sigma){
+	float sum_hg = 0, sum_k = 0;
+	float curr_elem, hg;
+	for(int i=0; i<kheight; ++i){
+		for(int j=0; j<kwidth; ++j){
+			float x = j-kwidth/2;
+			float y = i-kheight/2;
+			kernel_matrix[j*kheight+i] = laplacianOfGaussian(x,y,sigma);
+		}
+	}
+}*/
+
+void computeLogKernel(float * kernel_matrix, cl_int kwidth, cl_int kheight, float sigma){
+	float sum_hg = 0, sum_k = 0;
+	float curr_elem, hg;
+	for(int i=0; i<kheight; ++i){
+		for(int j=0; j<kwidth; ++j){
+			float x = j-kwidth/2;
+			float y = i-kheight/2;
+			curr_elem = exp(-(x*x + y*y)/(2*(sigma*sigma)));
+			sum_hg += curr_elem;
+			kernel_matrix[j*kheight+i] = curr_elem*(x*x + y*y-2*(sigma*sigma))/(pow(sigma,4));
+		}
+	}
+	
+	for(int i=0; i<kheight; ++i){
+		for(int j=0; j<kwidth; ++j){
+			kernel_matrix[j*kheight+i] /= sum_hg;
+			sum_k += kernel_matrix[j*kheight+i];
+		}
+	}
+
+	for(int i=0; i<kheight; ++i){
+		for(int j=0; j<kwidth; ++j){
+			kernel_matrix[j*kheight+i] = kernel_matrix[j*kheight+i] - sum_k/(kwidth*kheight);
+		}
+	}
+}
+
+void print_matrix(float * matrix, int height, int width){
+	for(int i=0; i<height; ++i){
+		for(int j=0; j<width; ++j){
+			printf("%f ", matrix[j*height+i]);
+		}
+		printf("\n");
+	}
+}
+
 cl_event log_convolution(cl_kernel log_k, cl_command_queue que,
 	cl_mem d_output, cl_mem d_input,
 	cl_int nrows, cl_int ncols, cl_mem d_kernel_matrix, cl_int kwidth, cl_int kheight)
@@ -60,9 +117,10 @@ cl_event log_convolution(cl_kernel log_k, cl_command_queue que,
 
 
 void usage(int argc){
-	if(argc<2){
-		fprintf(stderr,"Usage: ./log <image.png> <output.png>\n ");
+	if(argc<3){
+		fprintf(stderr,"Usage: ./log <image.png> <output.png> [sigma]\n ");
 		fprintf(stderr,"the image is an image with 4 channels (R,G,B,transparency)\n");
+		fprintf(stderr,"sigma is the standard deviation to create the kernel for the LoG operator (default 0.5)\n");
 		fprintf(stderr,"output is the name of the output image\n");
 
 		exit(1);
@@ -93,6 +151,8 @@ unsigned char* grayscale2RGBA(unsigned char* inputGray,int width, int height){
 
 int main(int argc, char ** args){
 	usage(argc);
+	float sigma = 0.5;
+	if(argc > 3) sigma = atof(args[3]);
 	int width,height,channels;
 	// caricamento immagine in memoria come array di unsigned char
 	unsigned char * img = stbi_load(args[1],&width,&height,&channels,STBI_rgb_alpha);
@@ -155,12 +215,27 @@ int main(int argc, char ** args){
 
 	//LoG matrix 5x5
 	float kernel_matrix[] = {
-        0, 0, 1, 0, 0,
-        0, 1, 2, 1, 0,
-        1, 2, -16, 2, 1,
-		0, 1, 2, 1, 0,
-		0, 0, 1, 0, 0};
+        0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0,
+		0, 0, 0, 0, 0,
+		0, 0, 0, 0, 0,
+		0, 0, 0, 0, 0};
+	/*
+	float kernel_matrix[] = {
+        0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0,
+		0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0,
+		0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0,
+		0, 0, 0, 0, 0, 0, 0, 0, 0,
+		};
+	*/
 	cl_int kwidth = 5, kheight = 5;
+	computeLogKernel(kernel_matrix, kwidth, kheight, sigma);
+	print_matrix(kernel_matrix, kheight, kwidth);
 
 	d_kernel_matrix = clCreateBuffer(ctx,
 	CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
