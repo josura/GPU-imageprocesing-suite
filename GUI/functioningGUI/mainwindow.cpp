@@ -275,24 +275,29 @@ void MainWindow::on_pushButton_5_clicked()
     QString operation=ui->comboBox_2->currentText();
     this->setImage( ui->lineEdit_8->text());
     if(changedImage)started=false;
-    QString regions = ui->lineEdit_9->text();
-    QString threshold = ui->lineEdit_10->text();
-    QString otherParam = ui->lineEdit_11->text();
+    QString param1 = ui->lineEdit_9->text();
+    QString param2 = ui->lineEdit_10->text();
+    QString param3 = ui->lineEdit_11->text();
     bool valid=true;
 
 
-    if(operation=="regionGrowing" && regions==""){
+    /*if(operation=="regionGrowing" && param1==""){
         QMessageBox::warning(this," regions not specified","for region growing the regions of the matrix must be given, setting to default(2)");
-        regions="2";
-        ui->lineEdit_9->setText(regions);
-    }
+        param1="2";
+        ui->lineEdit_9->setText(param1);
+    }*/
 
-    if(operation=="regionGrowing" && !isNumber(regions)){
-        QMessageBox::critical(this," wrong format"," the number of regions "+regions+" is not a number");
+    if((operation=="regionGrowing") && !isNumber(param1)){
+        QMessageBox::critical(this," wrong format"," the parameter "+param1+" is not a number");
         return;
     }
 
-    if(valid && (changedImage || operation!=oldOperation || ((oldregions!=regions || oldthreshold!=threshold) &&operation=="regionGrowing") ) &&!started){
+    if((operation=="regionGrowing") && !isNumber(param2)){
+        QMessageBox::critical(this," wrong format"," the parameter "+param2+" is not a number");
+        return;
+    }
+
+    if(valid && (changedImage || operation!=oldOperation || ((oldregions!=param1 || oldthreshold!=param2) &&operation=="regionGrowing") ) &&!started){
         QObject *parentProc=nullptr;
         QStringList arguments;
         arguments << ui->lineEdit_8->text();
@@ -306,23 +311,20 @@ void MainWindow::on_pushButton_5_clicked()
 
         QString se = procdirOtsu.absoluteFilePath();
         if(operation=="regionGrowing" ){
-            arguments << regions <<"/tmp/segmentImage.png";
-            if(threshold!=""){
-                if(!isNumber(threshold)){
-                    QMessageBox::critical(this," wrong format"," the distance threshold "+threshold+" is not a number");
-                    return;
-                }
-                arguments<<threshold<<otherParam;
+            arguments <<"/tmp/segmentImage.png";
+            if(param3!=""){
+
+                arguments<<param1 << param2 <<param3;
             }
             se = procdirRegion.absoluteFilePath();
         } else{
             arguments << "/tmp/segmentImage.png";
             if(operation=="Canny"){
-                arguments<<regions<<threshold;
+                arguments<<param1<<param2<<param3;
                 se = procdirCanny.absoluteFilePath();
             }
             if(operation=="LoG"){
-                arguments<<regions;
+                arguments<<param1;
                 se = procdirLog.absoluteFilePath();
             }
         }
@@ -373,30 +375,31 @@ void MainWindow::on_pushButton_8_clicked()
 void MainWindow::on_comboBox_2_activated(const QString &arg1)
 {
     if(arg1=="LoG"){
-        ui->label_7->setText("gamma");
+        ui->label_7->setText("sigma");
         ui->label_7->setVisible(true);
         ui->label_8->setText("unused");
         ui->label_8->setVisible(false);
         ui->lineEdit_10->setVisible(false);
-        ui->lineEdit_8->setVisible(true);
+        ui->lineEdit_9->setVisible(true);
         ui->label_9->setVisible(false);
         ui->lineEdit_11->setVisible(false);
     }else if (arg1=="Canny"){//ui->comboBox_2->currentText()=="LoG" || ui->comboBox_2->currentText()=="Canny"){
-            ui->label_7->setText("lowerThreshold");
+            ui->label_7->setText("sigma");
             ui->label_7->setVisible(true);
-            ui->label_8->setText("higherThreshold");
+            ui->label_8->setText("lowerThreshold");
             ui->label_8->setVisible(true);
             ui->lineEdit_10->setVisible(true);
-            ui->lineEdit_8->setVisible(true);
-            ui->label_9->setVisible(false);
-            ui->lineEdit_11->setVisible(false);
+            ui->lineEdit_9->setVisible(true);
+            ui->label_9->setText("higherThreshold");
+            ui->label_9->setVisible(true);
+            ui->lineEdit_11->setVisible(true);
     } else if(arg1=="regionGrowing"){
-        ui->label_7->setText("threshold");
+        ui->label_7->setText("coordinate x");
         ui->label_7->setVisible(true);
-        ui->label_8->setText("coordinate x");
-        ui->label_9->setText("coordinate y");
+        ui->label_8->setText("coordinate y");
+        ui->label_9->setText("threshold");
         ui->label_8->setVisible(true);
-        ui->lineEdit_8->setVisible(true);
+        ui->lineEdit_9->setVisible(true);
         ui->lineEdit_10->setVisible(true);
         ui->label_9->setVisible(true);
         ui->lineEdit_11->setVisible(true);
@@ -405,7 +408,7 @@ void MainWindow::on_comboBox_2_activated(const QString &arg1)
         ui->label_7->setVisible(false);
         ui->label_8->setText("threshold");
         ui->label_8->setVisible(false);
-        ui->lineEdit_8->setVisible(false);
+        ui->lineEdit_9->setVisible(false);
         ui->lineEdit_10->setVisible(false);
         ui->label_9->setVisible(false);
         ui->lineEdit_11->setVisible(false);
