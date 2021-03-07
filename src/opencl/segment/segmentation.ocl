@@ -668,7 +668,7 @@ void kernel non_maxima_suppression(read_only image2d_t magnitudes, write_only im
 
 void kernel hysteresis(global uchar4 * restrict output,
 	read_only image2d_t input,
-	uint low_threshold, uint high_threshold){
+	uint low_threshold, uint high_threshold, global int * restrict angles){
 
 	const int2 px_coords = (int2)(get_global_id(0),get_global_id(1));
 	const int2 dim = get_image_dim(input);
@@ -681,20 +681,43 @@ void kernel hysteresis(global uchar4 * restrict output,
 		if(magnitude.x >= high_threshold) output[gi] = (uchar4)(255,255,255,magnitude.w);
 		else if(magnitude.x <= low_threshold) output[gi] = (uchar4)(0,0,0,magnitude.w);
 		else{
-			//Weak edge, check 8-connected neighbors
-			const int2 neigh_map[8] = {(int2)(-1,-1),(int2)(-1,0), (int2)(-1,1), (int2)(0,-1), (int2)(0,1), (int2)(1,-1), (int2)(1,0), (int2)(1,1)};
-			uint neighbor_magnitude;
-			#pragma unroll
-			for(int i=0; i<8; ++i){
-				neighbor_magnitude = read_imageui(input, sampler, px_coords+neigh_map[i]).x;
-				if(neighbor_magnitude >= high_threshold){
-					//Neighbor is a strong edge, connect and exit
-					output[gi] = (uchar4)(255,255,255,magnitude.w);
-					return;
-				}
+			//Weak edge, check neighbors
+			const int px_angle = angles[gi];
+			const uint4 px_magnitude = read_imageui(input, sampler, px_coords);
+			uint neigh1_px, neigh2_px;
+			int neigh1_angle, neigh2_angle;
+			int2 neigh_shift;
+			switch(px_angle){
+				case 0:
+					//0 degrees: the edge is perfectly vertical, check top and bottom neighbors
+					neigh_shift = (int2)(1,0);
+					break;
+				case 45:
+					//45 degrees: the edge is diagonal NW/SE, check NW/SE neighbors
+					neigh_shift = (int2)(1,1);
+					break;
+				case 90:
+					//90 degrees: edge is horizontal, check left and right neighbors
+					neigh_shift = (int2)(0,1);
+					break;
+				case 135:
+					//135 degrees: the edge is diagonal NE/SW, check NE/SW neighbors
+					neigh_shift = (int2)(1,-1);
+					break;
+				default:
+					neigh_shift = (int2)(0,0);
+					break;
 			}
-			//No strong edges in the vicinity, turn black
-			output[gi] = (uchar4)(0,0,0,magnitude.w);
+			neigh1_px = read_imageui(input, sampler, px_coords+neigh_shift).x;
+			neigh2_px = read_imageui(input, sampler, px_coords-neigh_shift).x;
+			neigh1_angle = angles[global_index(px_coords+neigh_shift, dim.x)];
+			neigh2_angle = angles[global_index(px_coords-neigh_shift, dim.x)];
+			//If one of its neighbors in its direction has the same angle and is a strong edge, link
+			if((neigh1_px >= high_threshold && neigh1_angle == px_angle) || (neigh2_px >= high_threshold && neigh2_angle == px_angle)){
+				output[gi] = (uchar4)(255,255,255,magnitude.w);
+			}
+			//No strong edges in the same direction, turn black
+			else output[gi] = (uchar4)(0,0,0,magnitude.w);
 		}
 	}
 }
