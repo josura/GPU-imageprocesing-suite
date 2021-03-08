@@ -58,7 +58,7 @@ void print_matrix(float * matrix, int height, int width){
 }
 
 cl_event drog_convolution(cl_kernel drog_k, cl_command_queue que,
-	cl_mem d_magnitudes, cl_mem d_input, cl_mem d_angles,
+	cl_mem d_magnitudes, cl_mem d_input, cl_mem d_directions,
 	cl_int nrows, cl_int ncols, cl_mem d_kernel_matrix, cl_int kwidth, cl_int kheight)
 {
 	const size_t gws[] = { round_mul_up(ncols, gws_align_drog), nrows };
@@ -68,7 +68,7 @@ cl_event drog_convolution(cl_kernel drog_k, cl_command_queue que,
 	cl_uint i = 0;
 	err = clSetKernelArg(drog_k, i++, sizeof(d_magnitudes), &d_magnitudes);
 	ocl_check(err, "_set drog arg %d", i-1);
-	err = clSetKernelArg(drog_k, i++, sizeof(d_angles), &d_angles);
+	err = clSetKernelArg(drog_k, i++, sizeof(d_directions), &d_directions);
 	ocl_check(err, "_set drog arg %d", i-1);
 	err = clSetKernelArg(drog_k, i++, sizeof(d_input), &d_input);
 	ocl_check(err, "_set drog arg %d", i-1);
@@ -89,7 +89,7 @@ cl_event drog_convolution(cl_kernel drog_k, cl_command_queue que,
 }
 
 cl_event non_maxima_suppression(cl_kernel suppress_k, cl_command_queue que,
-	cl_mem d_magnitudes, cl_mem d_supp_magnitudes, cl_mem d_angles,
+	cl_mem d_magnitudes, cl_mem d_supp_magnitudes, cl_mem d_directions,
 	cl_int nrows, cl_int ncols)
 {
 	const size_t gws[] = { round_mul_up(ncols, gws_align_drog), nrows };
@@ -101,7 +101,7 @@ cl_event non_maxima_suppression(cl_kernel suppress_k, cl_command_queue que,
 	ocl_check(err, "_set suppress arg %d", i-1);
 	err = clSetKernelArg(suppress_k, i++, sizeof(d_supp_magnitudes), &d_supp_magnitudes);
 	ocl_check(err, "_set suppress arg %d", i-1);
-	err = clSetKernelArg(suppress_k, i++, sizeof(d_angles), &d_angles);
+	err = clSetKernelArg(suppress_k, i++, sizeof(d_directions), &d_directions);
 	ocl_check(err, "_set suppress arg %d", i-1);
 
 	err = clEnqueueNDRangeKernel(que, suppress_k, 2,
@@ -114,7 +114,7 @@ cl_event non_maxima_suppression(cl_kernel suppress_k, cl_command_queue que,
 }
 
 cl_event m_hysteresis(cl_kernel hysteresis_k, cl_command_queue que,
-	cl_mem d_output, cl_mem d_magnitudes, cl_mem d_angles, cl_uint low_threshold, cl_uint high_threshold,
+	cl_mem d_output, cl_mem d_magnitudes, cl_mem d_directions, cl_uint low_threshold, cl_uint high_threshold,
 	cl_int nrows, cl_int ncols)
 {
 	const size_t gws[] = { round_mul_up(ncols, gws_align_drog), nrows };
@@ -130,7 +130,7 @@ cl_event m_hysteresis(cl_kernel hysteresis_k, cl_command_queue que,
 	ocl_check(err, "_set hysteresis arg %d", i-1);
 	err = clSetKernelArg(hysteresis_k, i++, sizeof(high_threshold), &high_threshold);
 	ocl_check(err, "_set hysteresis arg %d", i-1);
-	err = clSetKernelArg(hysteresis_k, i++, sizeof(d_angles), &d_angles);
+	err = clSetKernelArg(hysteresis_k, i++, sizeof(d_directions), &d_directions);
 	ocl_check(err, "_set hysteresis arg %d", i-1);
 
 	err = clEnqueueNDRangeKernel(que, hysteresis_k, 2,
@@ -238,7 +238,7 @@ int main(int argc, char ** args){
 		sizeof(gws_align_drog), &gws_align_drog, NULL);
 	ocl_check(err, "preferred wg multiple for log");
 
-	cl_mem d_kernel_matrix = NULL, d_input = NULL, d_angles = NULL, d_magnitudes = NULL, d_supp_magnitudes = NULL, d_output = NULL;
+	cl_mem d_kernel_matrix = NULL, d_input = NULL, d_directions = NULL, d_magnitudes = NULL, d_supp_magnitudes = NULL, d_output = NULL;
 
 	const cl_image_format fmt = {
 		.image_channel_order = CL_RGBA,
@@ -284,7 +284,7 @@ int main(int argc, char ** args){
 		0, 0, 0, 0, 0,
 		0, 0, 0, 0, 0,
 		0, 0, 0, 0, 0};
-	cl_int kwidth = 5, kheight = 5;
+	cl_int kwidth = 3, kheight = 3;
 	computeDrogKernel(kernel_matrix, kwidth, kheight, sigma);
 	print_matrix(kernel_matrix, kheight, kwidth);
 
@@ -294,11 +294,11 @@ int main(int argc, char ** args){
 		&err);
 	ocl_check(err, "create buffer d_kernel_matrix");
 
-	d_angles = clCreateBuffer(ctx,
+	d_directions = clCreateBuffer(ctx,
 	CL_MEM_READ_WRITE | CL_MEM_HOST_READ_ONLY | CL_MEM_ALLOC_HOST_PTR,
 	sizeof(int)*width*height, NULL,
 		&err);
-	ocl_check(err, "create buffer d_angles");
+	ocl_check(err, "create buffer d_directions");
 
 	d_output = clCreateBuffer(ctx,
 	CL_MEM_WRITE_ONLY | CL_MEM_HOST_READ_ONLY | CL_MEM_ALLOC_HOST_PTR,
@@ -308,9 +308,9 @@ int main(int argc, char ** args){
 
 	cl_event drog_evt, suppress_evt, hysteresis_evt, map_evt;
 
-	drog_evt = drog_convolution(drog_k, que, d_magnitudes, d_input, d_angles, height, width, d_kernel_matrix, kwidth, kheight);
-	suppress_evt = non_maxima_suppression(suppress_k, que, d_magnitudes, d_supp_magnitudes, d_angles, height, width);
-	hysteresis_evt = m_hysteresis(hysteresis_k, que, d_output, d_supp_magnitudes, d_angles, low_threshold, high_threshold, height, width);
+	drog_evt = drog_convolution(drog_k, que, d_magnitudes, d_input, d_directions, height, width, d_kernel_matrix, kwidth, kheight);
+	suppress_evt = non_maxima_suppression(suppress_k, que, d_magnitudes, d_supp_magnitudes, d_directions, height, width);
+	hysteresis_evt = m_hysteresis(hysteresis_k, que, d_output, d_supp_magnitudes, d_directions, low_threshold, high_threshold, height, width);
 
 	outimg = clEnqueueMapBuffer(que, d_output, CL_TRUE,
 		CL_MAP_READ,
@@ -350,7 +350,7 @@ int main(int argc, char ** args){
 
 	clReleaseMemObject(d_output);
 	clReleaseMemObject(d_input);
-	clReleaseMemObject(d_angles);
+	clReleaseMemObject(d_directions);
 	clReleaseMemObject(d_kernel_matrix);
 	clReleaseKernel(drog_k);
 	clReleaseKernel(suppress_k);
