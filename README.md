@@ -8,7 +8,7 @@ To build this project for opencl the following dependencies must be satisfied:
 > - gcc 
 
 ## Requirements (CUDA, not implemented yet)
-To build this project for opencl the following dependencied must be satisfied:
+To build this project for CUDA the following dependencied must be satisfied:
 > - CUDA(with a supporting GPU of course)
 > - OpenCV (for image loading and manipulation)
 > - Cmake
